@@ -5,28 +5,16 @@ import matplotlib.pyplot as plt
 
 def compute_fft_at_target_freq(x, fs, target_freq):
     X = np.fft.rfft(x)
-    freq = np.fft.rfftfreq(x.size, d=1/fs)
+
+    #FFT is discrete: it computes the FFT at specific frequencies bins determined by the sampling frequency and the length of the input signal
+    freq = np.fft.rfftfreq(x.size, d=1/fs) #array of frequencies corresponding to the bins
 
     idx = np.argmin(np.abs(freq - target_freq)) #finds index where frequency is closest to target_freq
 
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
 
-if __name__ == "__main__":
-    
-    fs = 44100 #Isobel sampling frequency
-    target_freq = 1000
-    approximated_freq = 0
-
-    """ data = scipy.io.loadmat('PINN/idxX_2_idxY_2.mat')
-    print(data.keys())
-    x = data['ImpulseResponse']
-
-    fft_at_target, actual_freq = compute_fft_at_target_freq(x, fs, target_freq)
-    print(type(fft_at_target[0]))
-    
-    print(f"FFT at {actual_freq:.1f}Hz: {fft_at_target}") """
-
-    directory = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/h_100/'
+#Creates a 30x30 grid of the FFT values at a target frequency for each impulse response in a directory
+def create_FFT_grid(directory, fs, target_freq):
     grid = np.zeros((30, 30), dtype=complex)
 
     for entry in os.scandir(directory):
@@ -39,8 +27,10 @@ if __name__ == "__main__":
 
             #indexes in the file names go from 2 to 31, but as the grid uses indexes from 0 to 29 we subtract 2
             grid[idxX-2, idxY-2], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
-    
 
+    return grid, approximated_freq
+
+def magnitude_phase_plots(grid, approximated_freq):
     magnitude = np.abs(grid) #need to convert in dB
     phase = np.angle(grid)
 
@@ -58,3 +48,14 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
+
+if __name__ == "__main__":
+    
+    fs = 44100 #Isobel sampling frequency
+    target_freq = 200
+
+    directory = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/h_100/'
+    
+    grid, approximated_freq = create_FFT_grid(directory, fs, target_freq)
+    
+    magnitude_phase_plots(grid, approximated_freq)
