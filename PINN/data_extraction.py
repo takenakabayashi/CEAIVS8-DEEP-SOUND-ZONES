@@ -8,7 +8,6 @@ def compute_fft_at_target_freq(x, fs, target_freq):
 
     #FFT is discrete: it computes the FFT at specific frequencies bins determined by the sampling frequency and the length of the input signal
     freq = np.fft.rfftfreq(x.size, d=1/fs) #array of frequencies corresponding to the bins
-
     idx = np.argmin(np.abs(freq - target_freq)) #finds index where frequency is closest to target_freq
 
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
@@ -51,8 +50,8 @@ def magnitude_phase_plots(grid, approximated_freq):
 
 if __name__ == "__main__":
     
-    fs = 44100 #Isobel sampling frequency
-    target_freq = 200
+    fs = 48000 #Isobel sampling frequency
+    target_freq = 41
 
     directory = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/h_100/'
     
