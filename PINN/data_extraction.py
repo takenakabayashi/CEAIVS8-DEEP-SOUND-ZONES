@@ -12,25 +12,24 @@ def compute_fft_at_target_freq(x, fs, target_freq):
 
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
 
-#Creates a 30x30 grid of the FFT values at a target frequency for each impulse response in a directory
+#Creates a 32x32 grid of the FFT values at a target frequency for each impulse response in a directory
 def create_FFT_grid(directory, fs, target_freq):
-    grid = np.zeros((30, 30), dtype=complex)
+    grid = np.zeros((32, 32), dtype=complex)
 
     for entry in os.scandir(directory):
         if entry.is_file():
             idxX = int(entry.name.split('_')[1])
             idxY = int(entry.name.split('_')[-1].split('.')[0])
-            #print(f"idxX: {idxX}, idxY: {idxY}")
 
             ir_data = scipy.io.loadmat(entry.path)['ImpulseResponse'].flatten()
 
-            #indexes in the file names go from 2 to 31, but as the grid uses indexes from 0 to 29 we subtract 2
-            grid[idxX-2, idxY-2], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
+            #files indexes go from 1 to 32, grid has indexes 0-31 so we subtract 1
+            grid[idxX-1, idxY-1], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
 
     return grid, approximated_freq
 
 def magnitude_phase_plots(grid, approximated_freq):
-    magnitude = np.abs(grid) #need to convert in dB
+    magnitude = np.abs(grid) #TODO: convert in dB
     phase = np.angle(grid)
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 5))
@@ -53,8 +52,7 @@ if __name__ == "__main__":
     fs = 48000 #Isobel sampling frequency
     target_freq = 41
 
-    directory = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/h_100/'
+    directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/h_100/'
     
     grid, approximated_freq = create_FFT_grid(directory, fs, target_freq)
-    
     magnitude_phase_plots(grid, approximated_freq)
