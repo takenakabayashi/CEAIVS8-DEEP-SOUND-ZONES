@@ -1,7 +1,7 @@
 """ 
 Current implementation uses only source 1 and height 100, modeled as a 2D problem
 It takes x,y coordinates as input and outputs the predicted real and imaginary part of the FFT at the specified target frequency
-TODO: split data into test/train, add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
+TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """
 import os
 from sklearn.model_selection import train_test_split
@@ -38,14 +38,14 @@ def pde(x, y): #here x is the input (x and y coordinates) of the model and y the
             -y1_xx - y1_yy - k ** 2 * y1] #dirac delta has no imaginary part
 
 fs = 48000 #ISOBEL dataset sampling frequency
-directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/h_100/'
+directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
 
-grid, approximated_freq = create_FFT_grid(directory, fs, target_freq)
+grid, approximated_freq = create_FFT_grid(directory, fs, target_freq, heights=[100])
 
 #The input array X_train needs to be an array of (x,y) real-life coordinates in meters
 #We need to convert grid indexes into meters using the room dims, and then reshape them into (x,y) coords
 l_x, l_y = 4.14, 7.80 #room dimensions in meters
-n_x, n_y = grid.shape #32x32 grid
+n_x, n_y, _ = grid.shape #32x32 grid
 
 x_vals = np.linspace(0, l_x, n_x)
 y_vals = np.linspace(0, l_y, n_y)

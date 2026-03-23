@@ -12,47 +12,74 @@ def compute_fft_at_target_freq(x, fs, target_freq):
 
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
 
-#Creates a 32x32 grid of the FFT values at a target frequency for each impulse response in a directory
-def create_FFT_grid(directory, fs, target_freq):
-    grid = np.zeros((32, 32), dtype=complex)
+#Creates a 32x32x4 grid of the FFT values at a target frequency for each impulse response for all heights
+def create_FFT_grid(directory, fs, target_freq, heights):
+    grid = np.zeros((32, 32, len(heights)), dtype=complex)
 
-    for entry in os.scandir(directory):
-        if entry.is_file():
-            idxX = int(entry.name.split('_')[1])
-            idxY = int(entry.name.split('_')[-1].split('.')[0])
+    for height_idx, height_val in enumerate(heights):
+        dir = os.path.join(directory, f"h_{height_val}")
+        if os.path.isdir(dir):
+            for entry in os.scandir(dir):
+                if entry.is_file() and entry.name.endswith('.mat'):
+                    idxX = int(entry.name.split('_')[1])
+                    idxY = int(entry.name.split('_')[-1].split('.')[0])
 
-            ir_data = scipy.io.loadmat(entry.path)['ImpulseResponse'].flatten()
+                    ir_data = scipy.io.loadmat(entry.path)['ImpulseResponse'].flatten()
 
-            #files indexes go from 1 to 32, grid has indexes 0-31 so we subtract 1
-            grid[idxX-1, idxY-1], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
+                    #files indexes go from 1 to 32, grid has indexes 0-31 so we subtract 1
+                    grid[idxX-1, idxY-1, height_idx], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
 
     return grid, approximated_freq
 
-def magnitude_phase_plots(grid, approximated_freq):
-    magnitude = np.abs(grid) #TODO: convert in dB
+def magnitude_phase_plots(grid, approximated_freq, heights):
+    magnitude = np.abs(grid)
     phase = np.angle(grid)
+    
+    room_dims = [0, 4.14, 0, 7.80]
 
-    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+    fig = plt.figure(figsize=(18, 14), layout="constrained")
+    fig.suptitle(f'Room Response at {approximated_freq:.1f} Hz', fontsize=18)
+    
+    #this is to adapt the number of subplots to the number of heights
+    a, b = divmod(len(heights), 2)
+    subfigs = fig.subfigures(a + b, 2 if not b else 1)
+    subfigs_flat = np.array(subfigs).flat
 
-    #Magnitude plot
-    magnitude_plot = ax[0].imshow(magnitude, extent=[2, 31, 2, 31], origin='lower', cmap='viridis')
-    ax[0].set_title(f'Magnitude at {approximated_freq:.1f} Hz')
-    fig.colorbar(magnitude_plot, ax=ax[0], label='Amplitude')
+    for height_idx, height_val in enumerate(heights):
+        sf = subfigs_flat[height_idx]
+        
+        sf.suptitle(f'Height {height_val} cm', fontsize=14)
+        
+        axs = sf.subplots(1, 2)
+        
+        mag_slice = magnitude[:, :, height_idx]
+        phase_slice = phase[:, :, height_idx]
 
-    #Phase plot
-    phase_plot = ax[1].imshow(phase, extent=[2, 31, 2, 31], origin='lower', cmap='twilight')
-    ax[1].set_title(f'Phase at {approximated_freq:.1f} Hz')
-    fig.colorbar(phase_plot, ax=ax[1], label='Degrees')
+        # Magnitude
+        ax_mag = axs[0]
+        mag_plot = ax_mag.imshow(mag_slice, extent=room_dims, origin='lower', cmap='viridis', aspect='equal')
+        ax_mag.set_title('Magnitude', fontsize=10)
+        ax_mag.set_xlabel('X (m)')
+        ax_mag.set_ylabel('Y (m)')
+        sf.colorbar(mag_plot, ax=ax_mag, shrink=0.8)
 
-    plt.tight_layout()
+        # Phase
+        ax_phase = axs[1]
+        phase_plot = ax_phase.imshow(phase_slice, extent=room_dims, origin='lower', cmap='twilight', aspect='equal')
+        ax_phase.set_title('Phase', fontsize=10)
+        ax_phase.set_xlabel('X (m)')
+        ax_phase.set_ylabel('Y (m)')
+        sf.colorbar(phase_plot, ax=ax_phase, shrink=0.8)
+
     plt.show()
 
 if __name__ == "__main__":
     
     fs = 48000 #Isobel sampling frequency
-    target_freq = 41
+    target_freq = 41 #Hz
+    heights = [100, 130, 160, 190]
 
-    directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/h_100/'
+    directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
     
-    grid, approximated_freq = create_FFT_grid(directory, fs, target_freq)
-    magnitude_phase_plots(grid, approximated_freq)
+    grid, approximated_freq = create_FFT_grid(directory, fs, target_freq, heights)
+    magnitude_phase_plots(grid, approximated_freq, heights)
