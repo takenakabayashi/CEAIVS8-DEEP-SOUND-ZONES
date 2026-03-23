@@ -4,6 +4,7 @@ It takes x,y coordinates as input and outputs the predicted real and imaginary p
 TODO: split data into test/train, add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """
 import os
+from sklearn.model_selection import train_test_split
 import torch
 os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
@@ -27,10 +28,10 @@ def pde(x, y): #here x is the input (x and y coordinates) of the model and y the
     y1_xx = dde.grad.hessian(y, x,component=1, i=0, j=0)
     y1_yy = dde.grad.hessian(y, x,component=1, i=1, j=1)
 
-    #f = delta(x-x0) models a point source at location x0, source: https://arxiv.org/pdf/1712.06091
-    x0, y0 = 0.17, 7.53
+    #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
+    xs, ys = 0.17, 7.53
     sigma = 0.1
-    dist = (x[:, 0:1] - x0)**2 + (x[:, 1:2] - y0)**2
+    dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2
     f = (1 / (sigma * np.sqrt(2 * np.pi))) * torch.exp(-0.5 * dist / sigma**2) #dirac delta approximation with gaussian with mean 0 and small std sigma
 
     return [-y0_xx - y0_yy - k ** 2 * y0 - f,
@@ -50,11 +51,15 @@ x_vals = np.linspace(0, l_x, n_x)
 y_vals = np.linspace(0, l_y, n_y)
 
 X, Y = np.meshgrid(x_vals, y_vals, indexing='ij')
-X_train = np.vstack((X.flatten(), Y.flatten())).T.astype(np.float32)
+X = np.vstack((X.flatten(), Y.flatten())).T.astype(np.float32)
 
-#Reshape grid values to get real and imaginary parts into two different arrays
-y_train_real = np.real(grid).flatten().reshape(-1, 1).astype(np.float32)
-y_train_imag = np.imag(grid).flatten().reshape(-1, 1).astype(np.float32)
+y = grid.flatten().reshape(-1, 1).astype(np.complex64)
+
+#Split train/test into 80/20
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+
+y_train_real = np.real(y_train).astype(np.float32)
+y_train_imag = np.imag(y_train).astype(np.float32)
 
 #Add observed (Isobel) data as boundary conditions
 #https://github.com/lululxvi/deepxde/issues/1952#issuecomment-2724018030
@@ -77,3 +82,15 @@ model = dde.Model(data, net)
 
 model.compile("adam", lr=1e-3, loss="MSE", loss_weights=[1, 1, 100, 100]) #loss_weights = PDE real, PDE imaginary, data real, data imaginary
 losshistory, train_state = model.train(iterations=5000)
+
+#Model evaluation
+y_pred = model.predict(X_test)
+y_pred_real, y_pred_imag = y_pred[:, 0], y_pred[:, 1]
+
+y_test_real = np.real(y_test).flatten()
+y_test_imag = np.imag(y_test).flatten()
+
+test_mse_real = np.mean((y_test_real - y_pred_real)**2)
+test_mse_imag = np.mean((y_test_imag - y_pred_imag)**2)
+print(f"Test MSE real: {test_mse_real:.6f}")
+print(f"Test MSE imaginary: {test_mse_imag:.6f}")
