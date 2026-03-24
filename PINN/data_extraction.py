@@ -1,3 +1,13 @@
+"""
+create_FFT_grid function: 
+    Creates a 3D grid of FFT values of each impulse response at a target frequency, for all specified heights
+    The grid is used as input (by converting the grid indexes to x,y,z coordinates) and boundary conditions (FFT values) for the PINN model
+magnitude_phase_plots function:
+    Plots the magnitude and phase from the created FFT grid
+
+Run this code to visualize the room response at target_freq = 41 and for all heights = [100, 130, 160, 190]
+"""
+
 import os
 import scipy
 import numpy as np
@@ -12,7 +22,7 @@ def compute_fft_at_target_freq(x, fs, target_freq):
 
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
 
-#Creates a 32x32x4 grid of the FFT values at a target frequency for each impulse response for all heights
+#Creates a 32x32xlen(heights) grid of the FFT values at a target frequency for each impulse response for all specified heights
 def create_FFT_grid(directory, fs, target_freq, heights):
     grid = np.zeros((32, 32, len(heights)), dtype=complex)
 
@@ -41,9 +51,12 @@ def magnitude_phase_plots(grid, approximated_freq, heights):
     fig.suptitle(f'Room Response at {approximated_freq:.1f} Hz', fontsize=18)
     
     #this is to adapt the number of subplots to the number of heights
-    a, b = divmod(len(heights), 2)
-    subfigs = fig.subfigures(a + b, 2 if not b else 1)
-    subfigs_flat = np.array(subfigs).flat
+    n = len(heights)
+    ncols = 2 if n > 1 else 1
+    nrows = (n + ncols - 1) // ncols
+    
+    subfigs = fig.subfigures(nrows, ncols)
+    subfigs_flat = np.array(subfigs).flatten()
 
     for height_idx, height_val in enumerate(heights):
         sf = subfigs_flat[height_idx]
@@ -77,6 +90,7 @@ if __name__ == "__main__":
     
     fs = 48000 #Isobel sampling frequency
     target_freq = 41 #Hz
+    #heights = [100]
     heights = [100, 130, 160, 190]
 
     directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
