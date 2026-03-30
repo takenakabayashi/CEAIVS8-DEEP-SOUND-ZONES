@@ -17,6 +17,17 @@ c = 343.0 #m/s
 omega = 2 * np.pi * target_freq
 k = omega / c
 
+def nmse_db(y_true, y_pred):
+    num = np.sum(np.abs(y_true - y_pred)**2)
+    denom = np.sum(np.abs(y_true)**2)
+    
+    eps = 1e-12 #avoids division by 0
+    nmse = num / (denom + eps)
+    
+    nmse_db = 10 * np.log10(nmse + eps) #dB conversion
+    
+    return nmse_db
+
 #Helmholtz PDE implementation from https://deepxde.readthedocs.io/en/latest/demos/pinn_forward/helmholtz.2d.sound.hard.abc.html#helmholtz-sound-hard-scattering-problem-with-absorbing-boundary-conditions
 #inhomogeneous helmholtz equation because the source is inside the domain
 def pde(x, y): #here x is the input (x and y coordinates) of the model and y the output (pressure)
@@ -59,8 +70,12 @@ X = np.vstack((X.flatten(), Y.flatten(), Z.flatten())).T.astype(np.float32)
 
 y = grid.flatten().reshape(-1, 1).astype(np.complex64)
 
-#Split train/test into 80/20
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+#Split train/test to use n_mic training points
+n_mic = 15 #as in the Isobel paper
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, train_size=n_mic, random_state=42
+)
 
 y_train_real = np.real(y_train).astype(np.float32)
 y_train_imag = np.imag(y_train).astype(np.float32)
@@ -98,3 +113,10 @@ test_mse_real = np.mean((y_test_real - y_pred_real)**2)
 test_mse_imag = np.mean((y_test_imag - y_pred_imag)**2)
 print(f"Test MSE real: {test_mse_real:.6f}")
 print(f"Test MSE imaginary: {test_mse_imag:.6f}")
+
+#NMSE
+y_pred = y_pred_real + 1j * y_pred_imag
+y_test = y_test_real + 1j * y_test_imag
+
+nmse_db = nmse_db(y_test, y_pred)
+print(f"Test NMSE: {nmse_db:.2f} dB")
