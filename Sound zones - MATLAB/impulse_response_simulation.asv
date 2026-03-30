@@ -1,0 +1,174 @@
+clear; clc;
+
+load("absorption_coefficients.mat")
+
+room_dim = absorption.room_dim;
+S_total = absorption.S_total;
+V = absorption.V;
+fc = absorption.fc;
+alpha_sabine = absorption.alpha_sabine;
+alpha_eyring = absorption.alpha_eyring;
+T20 = absorption.T20;
+RT60 = absorption.RT60;
+
+height = 1.0;
+fs = 48000;
+sources = [
+    6.65, 7.93, 0; % original source 1 from VRLab 
+    5.23, 3.49, 0; % original source 2 from VRLab
+    0.2, 4.0, 0; % added new sources
+    3.5, 0.2, 0;
+    6.78, 4.0, 0;
+    0.2, 7.5, 0;
+    3.5, 7.93, 0;
+    0.2, 1.0, 0; 
+];
+
+[idxX, idxY] = meshgrid(2:31, 2:31);
+rx_x = (idxX - 1) * 0.23;
+rx_y = (idxY - 1) * 0.26;
+rx_z = height * ones(size(rx_x));
+rx = [rx_x(:), rx_y(:), rx_z(:)];
+
+n_sources = size(sources, 1);
+ir_all = cell(n_sources, 1);
+
+% estimating impulse responses for each source
+for src = 1:n_sources
+    fprintf('Simulating RIRs for source %d/%d', src, n_sources);
+    ir_all{src} = acousticRoomResponse(room_dim, sources(src, :), rx, ...
+        Algorithm="image-source", ...
+        ImageSourceOrder=5, ...
+        SampleRate=fs, ...
+        MaterialAbsorption=alpha_sabine, ...
+        BandCenterFrequencies=fc);
+    fprintf('Done simulating RIRs for source %d.\n', src);
+end
+
+% zero padding so all RIRs have the same length
+max_len = max(cellfun(@(x) size(x, 2), ir_all));
+for src = 1:n_sources
+    pad = max_len - size(ir_all{s})
+end
+
+source1 = [6.65, 7.93, 0];
+source2 = [5.23, 3.49, 0];
+source3 = [0.2, 4.0, 0];
+source4 = [3.5, 0.2, 0];
+source5 = [6.78, 4.0, 0];
+source6 = [0.2, 7.5 ,0];
+source7 = [3.5, 7.93, 0];
+source8 = [0.2, 1.0, 0];
+
+[idxX, idxY] = meshgrid(2:31, 2:31);
+rx_x = (idxX - 1) * 0.23;
+rx_y = (idxY - 1) * 0.26;
+rx_z = height * ones(size(rx_x));
+
+rx = [rx_x(:), rx_y(:), rx_z(:)];
+
+fprintf('Simulating RIRs for source 1...\n');
+ir_source1 = acousticRoomResponse(room_dim, source1, rx, ...
+    Algorithm="image-source", ...
+    ImageSourceOrder=5, ...
+    SampleRate=fs, ...
+    MaterialAbsorption=alpha_sabine, ...
+    BandCenterFrequencies=fc);
+
+fprintf('Simulating RIRs for source 2...\n');
+ir_source2 = acousticRoomResponse(room_dim, source2, rx, ...
+    Algorithm="image-source", ...
+    ImageSourceOrder=5, ...
+    SampleRate=fs, ...
+    MaterialAbsorption=alpha_sabine, ...
+    BandCenterFrequencies=fc);
+
+fprintf('Simulating RIRs for source 3...\n');
+ir_source3 = acousticRoomResponse(room_dim, source3, rx, ...
+    Algorithm="image-source", ...
+    ImageSourceOrder=5, ...
+    SampleRate=fs, ...
+    MaterialAbsorption=alpha_sabine, ...
+    BandCenterFrequencies=fc);
+
+fprintf('Simulating RIRs for source 4...\n');
+ir_source4 = acousticRoomResponse(room_dim, source4, rx, ...
+    Algorithm="image-source", ...
+    ImageSourceOrder=5, ...
+    SampleRate=fs, ...
+    MaterialAbsorption=alpha_sabine, ...
+    BandCenterFrequencies=fc);
+
+fprintf('Done.\n');
+
+% zero-padding to make them the same length
+sizes = [size(ir_source1, 2) size(ir_source2, 2) size(ir_source3, 2) size(ir_source4, 2)];
+target_len = max(sizes);
+
+ir_source1_padded = [ir_source1, zeros(size(ir_source1, 1), target_len - size(ir_source1, 2))];
+ir_source2_padded = [ir_source2, zeros(size(ir_source2, 1), target_len - size(ir_source2, 2))];
+ir_source3_padded = [ir_source3, zeros(size(ir_source3, 1), target_len - size(ir_source3, 2))];
+ir_source4_padded = [ir_source4, zeros(size(ir_source4, 1), target_len - size(ir_source4, 2))];
+
+output_dir_s1 = 'individual_RIRs/source_1';
+output_dir_s2 = 'individual_RIRs/source_2';
+output_dir_s3 = 'individual_RIRs/source_3';
+output_dir_s4 = 'individual_RIRs/source_4';
+mkdir(output_dir_s1);
+mkdir(output_dir_s2);
+mkdir(output_dir_s3);
+mkdir(output_dir_s4);
+
+fprintf('Saving source 1 IRs...\n');
+for i = 1:size(ir_source1_padded, 1)
+    ImpulseResponse = ir_source1_padded(i, :);
+    rx_pos = rx(i, :);
+    
+    % Recover 2D grid indices (matching your meshgrid: idxX 2:31, idxY 2:31)
+    idxX = mod(i-1, 30) + 2;   % columns vary fastest (matches meshgrid)
+    idxY = floor((i-1) / 30) + 2;
+    
+    filename = fullfile(output_dir_s1, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
+    save(filename, 'ImpulseResponse', 'fs', 'rx_pos');
+end
+
+fprintf('Saving source 2 IRs...\n');
+for i = 1:size(ir_source2_padded, 1)
+    ImpulseResponse = ir_source2_padded(i, :);
+    rx_pos = rx(i, :);
+    
+    idxX = mod(i-1, 30) + 2;
+    idxY = floor((i-1) / 30) + 2;
+    
+    filename = fullfile(output_dir_s2, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
+    save(filename, 'ImpulseResponse', 'fs', 'rx_pos');
+end
+
+fprintf('Saving source 3 IRs...\n');
+for i = 1:size(ir_source3_padded, 1)
+    ImpulseResponse = ir_source3_padded(i, :);
+    rx_pos = rx(i, :);
+    
+    idxX = mod(i-1, 30) + 2;
+    idxY = floor((i-1) / 30) + 2;
+    
+    filename = fullfile(output_dir_s3, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
+    save(filename, 'ImpulseResponse', 'fs', 'rx_pos');
+end
+
+fprintf('Saving source 4 IRs...\n');
+for i = 1:size(ir_source4_padded, 1)
+    ImpulseResponse = ir_source4_padded(i, :);
+    rx_pos = rx(i, :);
+    
+    idxX = mod(i-1, 30) + 2;
+    idxY = floor((i-1) / 30) + 2;
+    
+    filename = fullfile(output_dir_s4, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
+    save(filename, 'ImpulseResponse', 'fs', 'rx_pos');
+end
+
+fprintf('Saved %d source1 IRs to "%s"\n', size(ir_source1_padded, 2), output_dir_s1);
+fprintf('Saved %d source2 IRs to "%s"\n', size(ir_source2_padded, 2), output_dir_s2);
+
+%view_irs(ir_source1_padded, ir_source2_padded, rx, fs);

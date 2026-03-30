@@ -4,7 +4,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.colors import ListedColormap
 from scipy.linalg import eigh
 
-
+# acoustic contrast control 
 def acc_solve(H_bright, H_dark, freq_idx=None):
     """
     Solve ACC at a single frequency.
@@ -52,6 +52,25 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
                            freq_min=100, freq_max=8000,
                            n_map_freqs=4,
                            save_prefix='zone_eval'):
+    """
+    Full zone quality evaluation.
+
+    Args:
+        H               : (n_measured, n_sources, n_freqs) transfer functions
+        freqs           : (n_freqs,) frequency axis in Hz
+        bright_idx      : list of flat grid indices for bright zone
+        dark_idx        : list of flat grid indices for dark zone
+        all_positions   : (n_measured, 2) mic positions in metres
+        grid_size       : side length of the square grid
+        dx, dy          : grid spacing in metres
+        source_positions: list of (x,y) tuples for loudspeakers (optional)
+        freq_min/max    : frequency range to evaluate
+        n_map_freqs     : how many spatial maps to show
+        save_prefix     : filename prefix for saved figures
+
+    Returns:
+        dict with keys: freqs_eval, contrasts, efforts, weights
+    """
     H_B = H[bright_idx]
     H_D = H[dark_idx]
 
@@ -73,7 +92,7 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
     efforts   = np.array(efforts)
     freq_vals = freqs[fi_eval]
 
-    # ── Summary statistics ────────────────────────────────────────────────────
+    # summary report
     print("\n" + "=" * 55)
     print("  Sound Zone Quality Report")
     print("=" * 55)
@@ -96,7 +115,7 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
     print(f"    Max    : {np.max(efforts):>7.2f} dB  @ {freq_vals[np.argmax(efforts)]:.0f} Hz")
     print("=" * 55)
 
-    # ── Figure 1: Metrics across frequency ───────────────────────────────────
+    # frequency metrics
     fig1, axes = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
     fig1.suptitle(
         f"Zone Quality Metrics  |  Bright={len(bright_idx)} pts, "
@@ -104,7 +123,7 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
         fontsize=11
     )
 
-    # Acoustic contrast
+    # Acoustic contrast plot
     ax = axes[0]
     ax.plot(freq_vals, contrasts, color='#2ecc71', linewidth=1.5)
     ax.fill_between(freq_vals, 0, contrasts,
@@ -137,7 +156,7 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
     plt.savefig(f'{save_prefix}_metrics.png', dpi=150)
     plt.show()
 
-    # ── Figure 2: Spatial pressure maps at selected frequencies ──────────────
+    # spatial pressure maps at different frequencies
     # Pick n_map_freqs evenly spaced frequencies to visualise
     map_indices = np.linspace(0, len(fi_eval) - 1, n_map_freqs, dtype=int)
     map_fi      = fi_eval[map_indices]
@@ -219,25 +238,18 @@ def evaluate_zone_quality(H, freqs, bright_idx, dark_idx,
         'weights':   weights,
     }
 
-
-# ---------------------------------------------------------------------------
-# Main — plug directly into your existing data loading
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
-    import scipy.io, re, os, pandas as pd, plotly.express as px
-    from dash import Dash, dcc, html, Input, Output, State, callback_context
-    from dash.exceptions import PreventUpdate
+    import scipy.io, re, os
 
-    # ── Config ────────────────────────────────────────────────────────────────
+    # room and grid configs
     ROOM_LX = 6.98;  ROOM_LY = 8.12;  GRID_N = 32
-    DX = ROOM_LX / (GRID_N - 1)       # 0.225 m
-    DY = ROOM_LY / (GRID_N - 1)       # 0.262 m
+    DX = ROOM_LX / (GRID_N - 1) # 0.225 m between points
+    DY = ROOM_LY / (GRID_N - 1) # 0.262 m between points
     SOURCE_POSITIONS = [(6.65, 7.93), (5.23, 3.49)]
     FS = 48000;  NFFT = 4096
     FREQ_MIN = 100;  FREQ_MAX = 8000
-    # ─────────────────────────────────────────────────────────────────────────
 
+    # read position based on file name
     def parse_position(filename):
         m = re.search(r'idxX_(\d+)_idxY_(\d+)', filename)
         return int(m.group(1)), int(m.group(2))
@@ -254,83 +266,148 @@ if __name__ == "__main__":
         return np.array([p[1] for p in pairs])
 
     print("Loading RIRs …")
-    rir1 = load_rirs("./VRLAB-data/source_1/h_100/")
-    rir2 = load_rirs("./VRLAB-data/source_2/h_100/")
-    rir  = np.stack([rir1, rir2], axis=1)
+    #rir1 = load_rirs("./VRLAB-data/source_1/h_100/")
+    #rir2 = load_rirs("./VRLAB-data/source_2/h_100/")
+    #rir  = np.stack([rir1, rir2], axis=1)
+    
+    # simulated RIRs from matlab
+    simulated_rir1 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_1/")
+    simulated_rir2 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_2/")
+    #simulated_rir3 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_3/")
+    #simulated_rir4 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_4/")
+    #simulated_rir5 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_5/")
+    #simulated_rir6 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_6/")
+    #simulated_rir7 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_7/")
+    #simulated_rir8 = load_rirs("./Sound zones - MATLAB/individual_RIRS/source_8/")
+    rir = np.stack([simulated_rir1, simulated_rir2], axis=1) #, simulated_rir3, simulated_rir4, simulated_rir5, simulated_rir6, simulated_rir7, simulated_rir8], axis=1)
 
-    H     = np.fft.rfft(rir,  n=NFFT, axis=2)
+    H = np.fft.rfft(rir,  n=NFFT, axis=2)
     freqs = np.fft.rfftfreq(NFFT, d=1.0 / FS)
 
     xs_m = (np.arange(GRID_N * GRID_N) % GRID_N) * DX
     ys_m = (np.arange(GRID_N * GRID_N) // GRID_N) * DY
     all_positions = np.column_stack([xs_m, ys_m])
+    n_measured    = H.shape[0]
 
-    # ── Zone selection (reuse Dash app) ───────────────────────────────────────
-    df  = pd.DataFrame({'x': xs_m, 'y': ys_m, 'zone': 'Unassigned'})
-    app = Dash(__name__)
-    res = {"bright": [], "dark": []}
+    # zone definition
+    N_DARK_SAMPLES = 20    # for bright_only - uniformly sample this many "dark points" across the room
+    DARK_SEED      = 42
 
-    app.layout = html.Div([
-        dcc.Graph(id="grid"),
-        html.Div([
-            html.Button("Bright Zone", id="bright-btn", n_clicks=0,
-                        style={"backgroundColor":"#4a90e2","color":"white",
-                               "padding":"8px 16px","border":"none",
-                               "borderRadius":"4px","marginRight":"10px"}),
-            html.Button("Dark Zone", id="dark-btn", n_clicks=0,
-                        style={"backgroundColor":"#e74c3c","color":"white",
-                               "padding":"8px 16px","border":"none",
-                               "borderRadius":"4px"}),
-        ]),
-        html.Div(id="status", style={"marginTop":"10px","fontWeight":"bold"}),
-        html.Div("Lasso-select, assign zone, repeat. Close tab when done.",
-                 style={"color":"gray","marginTop":"8px"}),
-        dcc.Store(id="zone-store", data=df.to_dict("records")),
-    ])
+    def define_zones(all_positions, config, zone_radius_m=1.0):
+        """
+        Define bright and dark zones.
 
-    @app.callback(Output("grid","figure"), Input("zone-store","data"))
-    def upd_fig(zd):
-        df_d = pd.DataFrame(zd)
-        res["bright"] = df_d[df_d['zone']=='Bright'].index.tolist()
-        res["dark"]   = df_d[df_d['zone']=='Dark'].index.tolist()
-        fig = px.scatter(df_d, x='x', y='y', color='zone',
-                         color_discrete_map={"Unassigned":"lightgray",
-                                             "Bright":"#4a90e2","Dark":"#e74c3c"})
-        fig.update_layout(dragmode="lasso")
-        fig.update_traces(marker=dict(size=7))
-        return fig
+        Configs:
+            'symmetric_split' : two small zones side by side at room centre
+            'source_proximal' : bright near Source 2, dark in far corner
+            'diagonal'        : zones at opposite quadrants of room centre
+            'bright_only'     : bright = circular zone, dark = spatially uniform
+                                subsample of the ENTIRE remaining room
+                                (most realistic: "only audible in one spot")
+        """
+        cx  = ROOM_LX / 2
+        cy  = ROOM_LY / 2
+        r   = zone_radius_m
+        gap = 0.3
 
-    @app.callback(
-        Output("zone-store","data"), Output("status","children"),
-        Input("bright-btn","n_clicks"), Input("dark-btn","n_clicks"),
-        Input("grid","selectedData"), State("zone-store","data"),
-        prevent_initial_call=True)
-    def handle(bc, dc, sel, zd):
-        ctx = callback_context
-        if not ctx.triggered or sel is None: raise PreventUpdate
-        trig = ctx.triggered[0]["prop_id"].split(".")[0]
-        if trig not in ["bright-btn","dark-btn"]: raise PreventUpdate
-        label = "Bright" if trig == "bright-btn" else "Dark"
-        df = pd.DataFrame(zd)
-        for pt in sel.get("points",[]):
-            df.loc[(np.isclose(df['x'],pt['x']))&(np.isclose(df['y'],pt['y'])),'zone'] = label
-        return df.to_dict("records"), f"Bright: {(df['zone']=='Bright').sum()} | Dark: {(df['zone']=='Dark').sum()}"
+        pos = all_positions[:n_measured]
 
-    app.run(debug=False, port=8050)
+        def zone_indices(centre, radius):
+            dist = np.sqrt((pos[:, 0] - centre[0]) ** 2 +
+                           (pos[:, 1] - centre[1]) ** 2)
+            return np.where(dist <= radius)[0].tolist()
 
-    n_measured  = H.shape[0]
-    bright_idx  = [i for i in res["bright"] if i < n_measured]
-    dark_idx    = [i for i in res["dark"]   if i < n_measured]
+        def uniform_dark_subsample(excluded, n_samples, seed=DARK_SEED):
+            """Pick n_samples points spread evenly across the room,
+            excluding the bright zone."""
+            np.random.seed(seed)
+            pool   = np.array([i for i in range(n_measured)
+                                if i not in set(excluded)])
+            pool_x = pool % GRID_N
+            pool_y = pool // GRID_N
+            n_bins = int(np.ceil(np.sqrt(n_samples)))
+            xs_    = np.array_split(np.arange(GRID_N), n_bins)
+            ys_    = np.array_split(np.arange(GRID_N), n_bins)
+            chosen = []
+            for bx in xs_:
+                for by in ys_:
+                    mask = np.isin(pool_x, bx) & np.isin(pool_y, by)
+                    cands = pool[mask]
+                    if len(cands) > 0:
+                        chosen.append(int(cands[np.random.randint(len(cands))]))
+                    if len(chosen) >= n_samples:
+                        break
+                if len(chosen) >= n_samples:
+                    break
+            return chosen[:n_samples]
 
-    if not bright_idx or not dark_idx:
-        print("Need both zones selected."); exit()
+        if config == 'symmetric_split':
+            bright_centre = (cx - r - gap / 2, cy)
+            dark_centre   = (cx + r + gap / 2, cy)
+            bright_idx = zone_indices(bright_centre, r)
+            dark_idx   = zone_indices(dark_centre,   r)
 
-    # ── Evaluate ──────────────────────────────────────────────────────────────
-    results = evaluate_zone_quality(
-        H, freqs, bright_idx, dark_idx,
-        all_positions, GRID_N, DX, DY,
-        source_positions=SOURCE_POSITIONS,
-        freq_min=FREQ_MIN, freq_max=FREQ_MAX,
-        n_map_freqs=4,
-        save_prefix='zone_eval'
-    )
+        elif config == 'source_proximal':
+            bright_centre = (5.23, 3.49)
+            dark_centre   = (1.5,  6.5)
+            bright_idx = zone_indices(bright_centre, r)
+            dark_idx   = zone_indices(dark_centre,   r)
+
+        elif config == 'diagonal':
+            bright_centre = (cx - r, cy - r)
+            dark_centre   = (cx + r, cy + r)
+            bright_idx = zone_indices(bright_centre, r)
+            dark_idx   = zone_indices(dark_centre,   r)
+
+        elif config == 'bright_only':
+            # Bright zone near Source 2 — dark = whole rest of room
+            bright_centre = (5.23, 3.49)
+            bright_idx    = zone_indices(bright_centre, r)
+            dark_idx      = uniform_dark_subsample(bright_idx, N_DARK_SAMPLES)
+
+        else:
+            raise ValueError(f"Unknown config: {config}")
+
+        # Remove overlap and clamp to measured range
+        overlap    = set(bright_idx) & set(dark_idx)
+        bright_idx = [i for i in bright_idx if i not in overlap and i < n_measured]
+        dark_idx   = [i for i in dark_idx   if i not in overlap and i < n_measured]
+
+        return bright_idx, dark_idx
+
+    # ── Run evaluation for all zone configurations ────────────────────────────
+    configs = ['symmetric_split', 'source_proximal', 'diagonal', 'bright_only']
+
+    all_results = {}
+    for config in configs:
+        print(f"\n{'='*55}")
+        print(f"  Zone config: {config}")
+
+        bright_idx, dark_idx = define_zones(all_positions, config,
+                                             zone_radius_m=1.0)
+
+        if not bright_idx or not dark_idx:
+            print(f"  WARNING: empty zone for config '{config}' — skipping")
+            continue
+
+        results = evaluate_zone_quality(
+            H, freqs, bright_idx, dark_idx,
+            all_positions, GRID_N, DX, DY,
+            source_positions=SOURCE_POSITIONS,
+            freq_min=FREQ_MIN, freq_max=FREQ_MAX,
+            n_map_freqs=4,
+            save_prefix=f'zone_eval_{config}'
+        )
+        all_results[config] = results
+
+    # summary table
+    print("\n" + "=" * 55)
+    print("  Summary: All Zone Configurations")
+    print("=" * 55)
+    print(f"  {'Config':<20} {'Mean AC':>8} {'Median':>8} {'>10dB%':>8}")
+    print("-" * 55)
+    for config, res in all_results.items():
+        c = res['contrasts']
+        print(f"  {config:<20} {np.mean(c):>7.1f}  {np.median(c):>7.1f}"
+              f"  {100*np.mean(c > 10):>6.1f}%")
+    print("=" * 55)
