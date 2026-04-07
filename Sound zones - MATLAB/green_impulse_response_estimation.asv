@@ -121,7 +121,7 @@ for nx = 0:nx_max
             eps_x = 1 + (nx > 0);
             eps_y = 1 + (ny > 0);
             eps_z = 1 + (nz > 0);
-            Lambda_N = sqrt(eps_x * eps_y * eps_z / V);   % proper normalisation
+            Lambda_N = sqrt(eps_x * eps_y * eps_z * V));   % proper normalisation
             
             psi_src = cos(nx*pi*src(1)/lx) .* cos(ny*pi*src(2)/ly) .* cos(nz*pi*src(3)/lz);
             psi_rcv = cos(nx*pi*rcv_all(:,1)'/lx) .* cos(ny*pi*rcv_all(:,2)'/ly) .* cos(nz*pi*rcv_all(:,3)'/lz);
