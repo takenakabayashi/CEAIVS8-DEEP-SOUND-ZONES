@@ -26,6 +26,9 @@ def compute_fft_at_target_freq(x, fs, target_freq):
 def create_FFT_grid(directory, fs, target_freq, heights):
     grid = np.zeros((32, 32, len(heights)), dtype=complex)
 
+    if not os.path.isdir(directory):
+        raise ValueError(f"Directory {directory} does not exist")
+
     for height_idx, height_val in enumerate(heights):
         dir = os.path.join(directory, f"h_{height_val}")
         if os.path.isdir(dir):
@@ -39,9 +42,12 @@ def create_FFT_grid(directory, fs, target_freq, heights):
                     #files indexes go from 1 to 32, grid has indexes 0-31 so we subtract 1
                     grid[idxX-1, idxY-1, height_idx], approximated_freq = compute_fft_at_target_freq(ir_data, fs, target_freq)
 
+        else:
+            raise ValueError(f"Directory {dir} does not exist")
+        
     return grid, approximated_freq
 
-def magnitude_phase_plots(grid, approximated_freq, heights):
+def magnitude_phase_plots(grid, approximated_freq, heights, block=True):
     magnitude = np.abs(grid)
     phase = np.angle(grid)
     
@@ -84,7 +90,7 @@ def magnitude_phase_plots(grid, approximated_freq, heights):
         ax_phase.set_ylabel('Y (m)')
         sf.colorbar(phase_plot, ax=ax_phase, shrink=0.8)
 
-    plt.show()
+    plt.show(block=block)
 
 if __name__ == "__main__":
     
