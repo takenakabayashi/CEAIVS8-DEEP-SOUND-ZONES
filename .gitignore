@@ -1,6 +1,7 @@
 ISOBEL_SF_Dataset/
 individual_RIRs/
 .vscode/
+*.h5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

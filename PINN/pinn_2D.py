@@ -1,5 +1,5 @@
 """ 
-Current implementation uses only source 1 and height 100, modeled as a 2D problem
+Test implementation, uses only source 1 and height 100 for the listening room, modeled as a 2D problem
 It takes x,y coordinates as input and outputs the predicted real and imaginary part of the FFT at the specified target frequency
 TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """

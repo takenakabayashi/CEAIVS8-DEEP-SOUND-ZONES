@@ -1,3 +1,9 @@
+""" 
+PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points. Currently using listening room.
+Uses one source and all heights, modeled as a 3D problem.
+It takes x,y,z coordinates as input, output is the predicted real and imaginary part of the FFT at the specified target frequency.
+TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
+"""
 import os
 from sklearn.model_selection import train_test_split
 import torch
@@ -166,7 +172,7 @@ model.compile(
 )
 
 losshistory, train_state = model.train(
-    iterations=20000,
+    iterations=10000,
     display_every=1000,
 )
 
