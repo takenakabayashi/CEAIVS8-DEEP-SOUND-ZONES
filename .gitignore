@@ -211,4 +211,5 @@ VRLAB-data/
 
 *.png
 Sound zones - MATLAB/individual_RIRS/
-Sound zones - MATLAB/individual_RTFS/
+Sound zones - MATLAB/individual_RTFs/
+Sound zones - MATLAB/simulated_RTFs/
