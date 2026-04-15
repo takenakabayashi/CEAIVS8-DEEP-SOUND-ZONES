@@ -93,7 +93,7 @@ def magnitude_phase_plots(grid, approximated_freq, heights, block=True):
     plt.show(block=block)
 
 #X should be an array of [x,y,z,lx,ly,lz,sx,sy,sz] coordinates normalized between 0 and 1 (point coordinates, room dimensions and source coordinates)
-def extract_data():
+def extract_data_ISOBEL():
     LR = {
         "directory": "ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/",
         "sources_positions": [(0.17, 7.53, 1.0), (1.42, 2.08, 1.0)], #source_1 and source_2
@@ -115,6 +115,7 @@ def extract_data():
         "heights": [130, 160, 190]
         }
     
+    #Room B is missing sources position
     """ RB = {
         "directory": "ISOBEL_SF_Dataset/Room B/RoomB_SoundField_IRs/",
         "sources_positions": [(), ()], #source_1 and source_2
@@ -181,13 +182,12 @@ def extract_data():
 if __name__ == "__main__":
     
     fs = 48000 #Isobel sampling frequency
-    target_freq = 41 #Hz
-    #heights = [100]
+    target_freq = 41
     heights = [100, 130, 160, 190]
 
-    X, y = extract_data()
+    #X, y = extract_data_ISOBEL()
 
-    """ directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
+    directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
     
     grid, approximated_freq = create_FFT_grid(directory, fs, target_freq, heights)
-    magnitude_phase_plots(grid, approximated_freq, heights) """
+    magnitude_phase_plots(grid, approximated_freq, heights)

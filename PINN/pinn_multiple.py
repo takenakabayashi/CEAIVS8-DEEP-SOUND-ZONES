@@ -1,8 +1,8 @@
 """ 
-Predicts FFT of the impulse responses along a 32x32 grid for any room.
+Predicts FFT of the impulse response at a specific (x,y,z) position for any room.
 Uses all sources and all heights for multiple rooms as training data, modeled as a 3D problem.
 It takes normalized x,y,z coordinates, room dimensions and source position as input, output is the predicted real and imaginary part of the FFT at the specified target frequency.
-TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
+TODO: add room absorption parameter, add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """
 import os
 from sklearn.model_selection import train_test_split
@@ -11,7 +11,8 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import extract_data
+from data_extraction import extract_data_ISOBEL
+from test import extract_data_simulated
 
 target_freq = 40 #Hz
 c = 343.0 #m/s
@@ -49,7 +50,7 @@ def validation_nmse_metric(y_true, y_pred):
     y_pred_complex = y_pred[:, 0] + 1j * y_pred[:, 1]
     return nmse_db(y_true_complex, y_pred_complex)
 
-#dde.data.PDE wrapper, for printing statements
+#dde.data.PDE wrapper, for printing correct test loss and test metric
 class ValidationPDE(dde.data.PDE):
     def __init__(self, *args, validation_x, validation_y, **kwargs):
         self.validation_x = validation_x.astype(np.float32)
