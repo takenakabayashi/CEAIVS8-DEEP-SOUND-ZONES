@@ -1,6 +1,6 @@
 """ 
 PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points. Currently using listening room.
-Uses one source and all heights, modeled as a 3D problem.
+Uses one source (hard-coded) and all heights, modeled as a 3D problem.
 It takes x,y,z coordinates as input, output is the predicted real and imaginary part of the FFT at the specified target frequency.
 TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """
@@ -91,7 +91,7 @@ def pde(x, y):
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2)
 
-    xs, ys, zs = 0.17, 7.53, 1.0
+    xs, ys, zs = 0.17, 7.53, 1.0 #source position
     sigma = 0.1
     dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2 + (x[:, 2:3] - zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 

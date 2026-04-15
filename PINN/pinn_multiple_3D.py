@@ -113,7 +113,8 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1]
 
-X, y = extract_data()
+#X, y = extract_data_ISOBEL() for training on ISOBEL data
+X, y = extract_data_simulated()
 X, y, valid_mask = filter_zero_targets(X, y)
 
 removed_points = int((~valid_mask).sum())

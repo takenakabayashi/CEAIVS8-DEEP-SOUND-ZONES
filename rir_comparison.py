@@ -1,7 +1,9 @@
-
+"""
+Compares simulated RIRs with measured ISOBEL RIRs at a specified frequency and heights
+"""
 import numpy as np
 
-from data_extraction import create_FFT_grid, magnitude_phase_plots
+from PINN.utils import create_FFT_grid, magnitude_phase_plots
 
 def nmse_db(y_true, y_pred):
     num = np.sum(np.abs(y_true - y_pred)**2)
@@ -15,7 +17,7 @@ def nmse_db(y_true, y_pred):
     return nmse_db
 
 if __name__ == "__main__":
-    dir_real = 'ISOBEL_SF_Dataset/VRLab/VRLab_SoundField_IRs/source_1/'
+    dir_real = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/'
     grid_real, freq_real = create_FFT_grid(dir_real, fs=48000, target_freq=40, heights=[100])
 
     dir_sim = 'individual_RIRs/source_1/'
