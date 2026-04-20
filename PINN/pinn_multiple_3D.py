@@ -11,8 +11,7 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import extract_data_ISOBEL
-from test import extract_data_simulated
+from data_extraction import extract_data_ISOBEL, extract_data_simulated
 
 target_freq = 40 #Hz
 c = 343.0 #m/s
@@ -125,13 +124,13 @@ X_train, X_holdout, y_train, y_holdout = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-validation_fraction = 0.5
+val_fraction = 0.5
 
 #Split again to get test and validation data
 X_val, X_test, y_val, y_test = train_test_split(
     X_holdout,
     y_holdout,
-    test_size=1 - validation_fraction,
+    test_size=1 - val_fraction,
     random_state=42,
 )
 
@@ -175,6 +174,7 @@ model.compile(
 losshistory, train_state = model.train(
     iterations=10000,
     display_every=1000,
+    batch_size=128,
 )
 
 #Model evaluation

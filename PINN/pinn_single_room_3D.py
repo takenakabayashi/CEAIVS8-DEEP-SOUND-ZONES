@@ -122,7 +122,7 @@ removed_points = int((~valid_mask).sum())
 print(f"Filtered out {removed_points} points")
 
 n_mic = 15 
-validation_fraction = 0.5
+val_fraction = 0.5
 
 if len(X) <= n_mic:
     raise ValueError(f"Not enough non-zero targets after filtering: {len(X)} points available, but train_size={n_mic}")
@@ -133,7 +133,7 @@ X_train, X_holdout, y_train, y_holdout = train_test_split(X, y, train_size=n_mic
 X_val, X_test, y_val, y_test = train_test_split(
     X_holdout,
     y_holdout,
-    test_size=1 - validation_fraction,
+    test_size=1 - val_fraction,
     random_state=42,
 )
 

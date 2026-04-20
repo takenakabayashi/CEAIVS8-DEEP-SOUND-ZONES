@@ -100,14 +100,14 @@ def extract_data_simulated(file_path='simulatedData.h5', target_freq=40): #add a
     with h5py.File(file_path, 'r') as f:
         #Gets frequency index with value nearest to target_freq
         first_room = list(f.keys())[0]
-        freqs = f[first_room]['freqs'][0]  # Shape (K,)
+        freqs = f[first_room]['freqs'][0]  #shape (K,)
         freq_idx = np.abs(freqs - target_freq).argmin()
         
         print(f"Extracting data for {freqs[freq_idx]:.2f} Hz")
 
         #Iterates through each room
-        #for room_name in f.keys(): #use for room_name in list(f.keys())[:500] for a subset
-        for room_name in list(f.keys())[:2]:
+        #for room_name in f.keys(): #use for room_name in list(f.keys())[:500]: for a subset
+        for room_name in list(f.keys())[:500]:
             group = f[room_name]
             
             #Room constants
