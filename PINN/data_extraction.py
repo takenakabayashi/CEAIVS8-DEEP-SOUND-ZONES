@@ -4,7 +4,8 @@ import numpy as np
 
 from utils import create_FFT_grid
 
-#X should be an array of [x,y,z,lx,ly,lz,sx,sy,sz] coordinates normalized between 0 and 1 (point coordinates, room dimensions and source coordinates)
+#X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
+#x,y,z and sx,sy,sz coordinates are normalized between 0 and 1
 def extract_data_ISOBEL():
     LR = {
         "directory": "ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/",
@@ -90,6 +91,9 @@ def extract_data_ISOBEL():
     
     return X_tot, y_tot
 
+#Same as extract_data_ISOBEL but for the simulated data (stored in a h5 file)
+#X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
+#x,y,z and sx,sy,sz coordinates are normalized between 0 and 1
 def extract_data_simulated(file_path='simulatedData.h5', target_freq=40): #add absorption coeff as input?
     X_list = []
     y_list = []

@@ -1,7 +1,8 @@
 """ 
-Test implementation, uses only source 1 and height 100 for the listening room, modeled as a 2D problem
+Simple test implementation, can be deleted later
+It was used at the beginning for testing DeepXDE on a simple 2D problem before moving to the actual 3D problem
+Uses only source 1 and height 100 for the listening room, modeled as a 2D problem
 It takes x,y coordinates as input and outputs the predicted real and imaginary part of the FFT at the specified target frequency
-TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
 """
 import os
 from sklearn.model_selection import train_test_split
@@ -73,7 +74,7 @@ data = dde.data.PDE(
     pde,
     [bc_data_real, bc_data_imag],
     num_domain=5000,
-    num_boundary=0, #robin boundary conditions to be added later
+    num_boundary=0,
     anchors=X_train
 )
 

@@ -1,8 +1,8 @@
 """ 
-PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points. Currently using listening room.
-Uses one source (hard-coded) and all heights, modeled as a 3D problem.
+Single room approach: PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points. Currently using listening room.
+Currently uses one source (hard-coded) and all heights, modeled as a 3D problem.
 It takes x,y,z coordinates as input, output is the predicted real and imaginary part of the FFT at the specified target frequency.
-TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights, normalize by converting to dB
+TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
 from sklearn.model_selection import train_test_split
@@ -49,7 +49,10 @@ def validation_nmse_metric(y_true, y_pred):
     y_pred_complex = y_pred[:, 0] + 1j * y_pred[:, 1]
     return nmse_db(y_true_complex, y_pred_complex)
 
-#dde.data.PDE wrapper, just for changing printing statements
+#dde.data.PDE wrapper
+#The only thing this does is change the printing statements during training to print validation loss and test metric
+#Prints every display_every=1000 iterations:
+#Step | Train loss | Test loss (says test but it's actually the validation loss) | Test metric (NMSE in dB, same metric used in the ISOBEL paper)
 class ValidationPDE(dde.data.PDE):
     def __init__(self, *args, validation_x, validation_y, **kwargs):
         self.validation_x = validation_x.astype(np.float32)
