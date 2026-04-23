@@ -11,43 +11,20 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import create_FFT_grid
+from data_extraction import extract_grid
+from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
+from config import ISOBEL_FS, ISOBEL_ROOMS
 
-target_freq = 50 #Hz
+TARGET_FREQ = 41 #Hz
+ROOM = ISOBEL_ROOMS["LR"]
+SOURCE = 1
+
+n_mic = 15 #number of points used for training
+val_fraction = 0.5
+
 c = 343.0 #m/s
-omega = 2 * np.pi * target_freq
+omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
-
-def nmse_db(y_true, y_pred):
-    num = np.sum(np.abs(y_true - y_pred)**2)
-    denom = np.sum(np.abs(y_true)**2)
-    
-    eps = 1e-12 #avoids division by 0
-    nmse = num / (denom + eps)
-    
-    nmse_db = 10 * np.log10(nmse + eps) #dB conversion
-    
-    return nmse_db
-
-#filter out points with pressure (approximately) equal to zero
-def filter_zero_targets(X, y, magnitude_threshold=1e-8):
-    target_magnitude = np.abs(y).flatten()
-    valid_mask = target_magnitude > magnitude_threshold
-
-    return X[valid_mask], y[valid_mask], valid_mask
-
-def stack_complex_targets(y_complex):
-    return np.hstack(
-        (
-            np.real(y_complex).astype(np.float32),
-            np.imag(y_complex).astype(np.float32),
-        )
-    )
-
-def validation_nmse_metric(y_true, y_pred):
-    y_true_complex = y_true[:, 0] + 1j * y_true[:, 1]
-    y_pred_complex = y_pred[:, 0] + 1j * y_pred[:, 1]
-    return nmse_db(y_true_complex, y_pred_complex)
 
 #dde.data.PDE wrapper
 #The only thing this does is change the printing statements during training to print validation loss and test metric
@@ -94,7 +71,7 @@ def pde(x, y):
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2)
 
-    xs, ys, zs = 0.17, 7.53, 1.0 #source position
+    xs, ys, zs = ROOM["sources_positions"][SOURCE] #source position
     sigma = 0.1
     dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2 + (x[:, 2:3] - zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 
@@ -102,30 +79,11 @@ def pde(x, y):
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1] 
 
-fs = 48000 
-directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1'
-heights = [100, 130, 160, 190]
-
-grid, approximated_freq = create_FFT_grid(directory, fs, target_freq, heights)
-
-l_x, l_y, l_z = 4.14, 7.80, 2.78
-n_x, n_y, n_z = grid.shape
-
-x_vals = np.linspace(0, l_x, n_x)
-y_vals = np.linspace(0, l_y, n_y)
-z_vals = np.array(heights) / 100.0
-
-X, Y, Z = np.meshgrid(x_vals, y_vals, z_vals, indexing='ij')
-X = np.vstack((X.flatten(), Y.flatten(), Z.flatten())).T.astype(np.float32)
-
-y = grid.flatten().reshape(-1, 1).astype(np.complex64)
+X, y = extract_grid(ROOM, SOURCE, ISOBEL_FS, TARGET_FREQ)
 X, y, valid_mask = filter_zero_targets(X, y)
 
 removed_points = int((~valid_mask).sum())
 print(f"Filtered out {removed_points} points")
-
-n_mic = 15 
-val_fraction = 0.5
 
 if len(X) <= n_mic:
     raise ValueError(f"Not enough non-zero targets after filtering: {len(X)} points available, but train_size={n_mic}")
@@ -148,6 +106,7 @@ print(f"Split sizes: train={len(X_train)}, val={len(X_val)}, test={len(X_test)}"
 bc_data_real = dde.icbc.PointSetBC(X_train, y_train_real, component=0)
 bc_data_imag = dde.icbc.PointSetBC(X_train, y_train_imag, component=1)
 
+l_x, l_y, l_z = ROOM["room_dimensions"]
 geom = dde.geometry.Cuboid([0, 0, 0], [l_x, l_y, l_z])
 
 y_val_targets = stack_complex_targets(y_val)

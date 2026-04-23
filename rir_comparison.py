@@ -1,30 +1,27 @@
 """
-Compares simulated RIRs with measured ISOBEL RIRs at a specified frequency and heights
+Compares simulated RIRs with measured ISOBEL RIRs at a specified target frequency
 """
-import numpy as np
 
-from PINN.utils import create_FFT_grid, magnitude_phase_plots
+from PINN.config import ISOBEL_FS, ISOBEL_ROOMS, PROJECT_ROOT
+from PINN.utils import create_FFT_grid, magnitude_phase_plots, nmse_db
 
-def nmse_db(y_true, y_pred):
-    num = np.sum(np.abs(y_true - y_pred)**2)
-    denom = np.sum(np.abs(y_true)**2)
-    
-    eps = 1e-12 #avoids division by 0
-    nmse = num / (denom + eps)
-    
-    nmse_db = 10 * np.log10(nmse + eps) #dB conversion
-    
-    return nmse_db
+sim_room = {
+            "LR": {
+            "name": "Listening Room",
+            "directory": PROJECT_ROOT / "individual_RIRs",
+            "sources_positions": [(0.17, 7.53, 1.0), (1.42, 2.08, 1.0)],
+            "room_dimensions": (4.14, 7.80, 2.78),
+            "grid_size": (32, 32, 1),
+            "heights": [100],
+        },
+    }
 
 if __name__ == "__main__":
-    dir_real = 'ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/source_1/'
-    grid_real, freq_real = create_FFT_grid(dir_real, fs=48000, target_freq=40, heights=[100])
+    magnitude_phase_plots(ISOBEL_ROOMS["LR"], source=1, fs=ISOBEL_FS, target_freq=41, block=False)
+    magnitude_phase_plots(sim_room["LR"], source=1, fs=48000, target_freq=41)
 
-    dir_sim = 'individual_RIRs/source_1/'
-    grid_sim, freq_sim = create_FFT_grid(dir_sim, fs=48000, target_freq=40, heights=[100])
-
-    magnitude_phase_plots(grid_real, freq_real, [100], block=False)
-    magnitude_phase_plots(grid_sim, freq_sim, [100])
+    grid_real, _ = create_FFT_grid(ISOBEL_ROOMS["LR"], source=1, fs=ISOBEL_FS, target_freq=41)
+    grid_sim, _ = create_FFT_grid(sim_room["LR"], source=1, fs=48000, target_freq=41)
 
     nmse_db = nmse_db(grid_real, grid_sim)
     print(f"Simulation Accuracy (NMSE): {nmse_db:.2f} dB")

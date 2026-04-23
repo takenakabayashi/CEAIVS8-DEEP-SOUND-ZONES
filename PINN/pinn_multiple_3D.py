@@ -7,47 +7,21 @@ TODO: add room absorption parameter, add Robin boundary conditions, look into ac
 import os
 from sklearn.model_selection import train_test_split
 import torch
+
 os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
 from data_extraction import extract_data_ISOBEL, extract_data_simulated
+from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
 
-target_freq = 40 #Hz
+TARGET_FREQ = 41 #Hz
+
+val_fraction = 0.5
+
 c = 343.0 #m/s
-omega = 2 * np.pi * target_freq
+omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
-
-def nmse_db(y_true, y_pred):
-    num = np.sum(np.abs(y_true - y_pred)**2)
-    denom = np.sum(np.abs(y_true)**2)
-    
-    eps = 1e-12 #avoids division by 0
-    nmse = num / (denom + eps)
-    
-    nmse_db = 10 * np.log10(nmse + eps) #dB conversion
-    
-    return nmse_db
-
-#filter out points with pressure (approximately) equal to zero
-def filter_zero_targets(X, y, magnitude_threshold=1e-8):
-    target_magnitude = np.abs(y).flatten()
-    valid_mask = target_magnitude > magnitude_threshold
-
-    return X[valid_mask], y[valid_mask], valid_mask
-
-def stack_complex_targets(y_complex):
-    return np.hstack(
-        (
-            np.real(y_complex).astype(np.float32),
-            np.imag(y_complex).astype(np.float32),
-        )
-    )
-
-def validation_nmse_metric(y_true, y_pred):
-    y_true_complex = y_true[:, 0] + 1j * y_true[:, 1]
-    y_pred_complex = y_pred[:, 0] + 1j * y_pred[:, 1]
-    return nmse_db(y_true_complex, y_pred_complex)
 
 #dde.data.PDE wrapper
 #The only thing this does is change the printing statements during training to print validation loss and test metric
@@ -92,7 +66,7 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
 
     y0, y1 = y[:, 0:1], y[:, 1:2] #y0 is the real part of the pressure, y1 the imaginary part
 
-    # divide by dimension^2 because of previous normalization (chain rule)
+    #Divide by dimension^2 because of previous normalization of coordinates (chain rule)
     y0_xx = dde.grad.hessian(y, x, component=0, i=0, j=0) / (Lx ** 2)
     y0_yy = dde.grad.hessian(y, x, component=0, i=1, j=1) / (Ly ** 2)
     y0_zz = dde.grad.hessian(y, x, component=0, i=2, j=2) / (Lz ** 2)
@@ -101,7 +75,7 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1) / (Ly ** 2)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2) / (Lz ** 2)
 
-    # physical source distance in meters
+    #Source distance in meters
     abs_x = x[:, 0:1] * Lx
     abs_y = x[:, 1:2] * Ly
     abs_z = x[:, 2:3] * Lz
@@ -115,8 +89,8 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1]
 
-#X, y = extract_data_ISOBEL() for training on ISOBEL data
-X, y = extract_data_simulated()
+#X, y = extract_data_ISOBEL(TARGET_FREQ) for training on ISOBEL data
+X, y = extract_data_simulated(target_freq=TARGET_FREQ, subset=10)
 X, y, valid_mask = filter_zero_targets(X, y)
 
 removed_points = int((~valid_mask).sum())
@@ -126,8 +100,6 @@ print(f"Filtered out {removed_points} points")
 X_train, X_holdout, y_train, y_holdout = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
-
-val_fraction = 0.5
 
 #Split again to get test and validation data
 X_val, X_test, y_val, y_test = train_test_split(

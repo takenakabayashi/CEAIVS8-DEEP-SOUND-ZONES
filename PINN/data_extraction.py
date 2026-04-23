@@ -3,44 +3,31 @@ import h5py
 import numpy as np
 
 from utils import create_FFT_grid
+from config import ISOBEL_FS, ISOBEL_ROOMS, SIMULATED_DATA_FILE
+
+def extract_grid(room, source, fs, target_freq):
+    grid, approximated_freq = create_FFT_grid(room, source, fs, target_freq)
+
+    #The input array X needs to be an array of (x,y,z) real-life coordinates in meters
+    #We need to convert grid indexes into meters using the room dims, and then reshape them into (x,y,z) coords
+    l_x, l_y, l_z = room["room_dimensions"] #room dimensions in meters
+    n_x, n_y, n_z = grid.shape
+
+    #TODO: fix the spacing, explained in the comment in create_FFT_grid function in utils.py
+    x_vals = np.linspace(0, l_x, n_x)
+    y_vals = np.linspace(0, l_y, n_y)
+    z_vals = np.linspace(0, l_z, n_z)
+
+    X, Y, Z = np.meshgrid(x_vals, y_vals, z_vals, indexing='ij')
+    X = np.vstack((X.flatten(), Y.flatten(), Z.flatten())).T.astype(np.float32)
+
+    y = grid.flatten().reshape(-1, 1).astype(np.complex64)
+
+    return X, y
 
 #X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
-#x,y,z and sx,sy,sz coordinates are normalized between 0 and 1
-def extract_data_ISOBEL():
-    LR = {
-        "directory": "ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/",
-        "sources_positions": [(0.17, 7.53, 1.0), (1.42, 2.08, 1.0)], #source_1 and source_2
-        "room_dimensions": (4.14, 7.80, 2.78),
-        "heights": [100, 130, 160, 190]
-        }
-
-    VR = {
-        "directory": "ISOBEL_SF_Dataset/VR Lab/VRLab_SoundField_IRs/",
-        "sources_positions": [(6.65, 7.93, 1.0), (5.23, 3.49, 1.0)], #source_1 and source_2
-        "room_dimensions": (6.98, 8.12, 3.03),
-        "heights": [100, 130, 160, 190]
-        }
-    
-    PR = {
-        "directory": "ISOBEL_SF_Dataset/Product Room/ProductRoom_SoundField_IRs/",
-        "sources_positions": [(0.32, 0.22, 1.0), (4.48, 4.81, 1.0)], #source_1 and source_2
-        "room_dimensions": (9.13, 12.03, 2.60),
-        "heights": [130, 160, 190]
-        }
-    
-    #Room B is missing sources position
-    """ RB = {
-        "directory": "ISOBEL_SF_Dataset/Room B/RoomB_SoundField_IRs/",
-        "sources_positions": [(), ()], #source_1 and source_2
-        "room_dimensions": (4.16, 6.46, 2.30),
-        "heights": [100] 
-    } """
-
-    rooms = [LR, VR, PR] #check sources z coordinate
-
-    fs = 48000 #ISOBEL dataset sampling frequency
-    target_freq = 41 #Hz
-
+#x,y,z coordinates are normalized between 0 and 1
+def extract_data_ISOBEL(target_freq, fs=ISOBEL_FS, rooms = list(ISOBEL_ROOMS.values())):
     X_tot = []
     y_tot = []
 
@@ -93,8 +80,8 @@ def extract_data_ISOBEL():
 
 #Same as extract_data_ISOBEL but for the simulated data (stored in a h5 file)
 #X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
-#x,y,z and sx,sy,sz coordinates are normalized between 0 and 1
-def extract_data_simulated(file_path='simulatedData.h5', target_freq=40): #add absorption coeff as input?
+#x,y,z coordinates are normalized between 0 and 1
+def extract_data_simulated(target_freq, file_path=SIMULATED_DATA_FILE, subset=None): #add absorption coeff as input?
     X_list = []
     y_list = []
 
@@ -110,8 +97,7 @@ def extract_data_simulated(file_path='simulatedData.h5', target_freq=40): #add a
         print(f"Extracting data for {freqs[freq_idx]:.2f} Hz")
 
         #Iterates through each room
-        #for room_name in f.keys(): #use for room_name in list(f.keys())[:500]: for a subset
-        for room_name in list(f.keys())[:500]:
+        for room_name in list(f.keys())[:subset] if subset is not None else list(f.keys()):
             group = f[room_name]
             
             #Room constants
