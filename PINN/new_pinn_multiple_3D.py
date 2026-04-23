@@ -86,7 +86,7 @@ def extract_data_simulated(df, file_path):
             num_receivers = receiver_pos.shape[0]
             idx = np.random.choice(
                 num_receivers,
-                size=min(MAX_POINTS_PER_ROOM, num_receivers),
+                size=min(max_points_per_room, num_receivers),
                 replace=False
             )
 
