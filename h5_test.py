@@ -1,6 +1,8 @@
 import os
 import h5py
 
+from PINN.config import SIMULATED_DATA_FILE
+
 #from https://gist.github.com/jbohnslav/92ea022c06356b880e4d60ab978eed27
 def print_hdf5(h5py_obj, level=-1, print_full_name: bool = True, print_attrs: bool = True) -> None:
     """ Prints the name and shape of datasets in a H5py HDF5 file.
@@ -52,12 +54,12 @@ def print_hdf5(h5py_obj, level=-1, print_full_name: bool = True, print_attrs: bo
 
 if __name__ == "__main__":
 
-    f = h5py.File('simulatedData.h5', 'r')
+    f = h5py.File(SIMULATED_DATA_FILE, 'r')
     #print(list(f.keys()))
 
     print_hdf5(f)
 
-    with h5py.File("simulatedData.h5", "r") as f:
+    with h5py.File(SIMULATED_DATA_FILE, "r") as f:
         for room_key in f.keys():
             room = f[room_key]
 

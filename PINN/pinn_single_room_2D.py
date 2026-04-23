@@ -11,11 +11,15 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import create_FFT_grid
+from utils import create_FFT_grid
+from config import ISOBEL_FS, ISOBEL_ROOMS
 
-target_freq = 40 #Hz
+TARGET_FREQ = 41 #Hz
+ROOM = ISOBEL_ROOMS["LR"]
+SOURCE = 1
+
 c = 343.0 #m/s
-omega = 2 * np.pi * target_freq
+omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
 
 #Helmholtz PDE implementation from https://deepxde.readthedocs.io/en/latest/demos/pinn_forward/helmholtz.2d.sound.hard.abc.html#helmholtz-sound-hard-scattering-problem-with-absorbing-boundary-conditions
@@ -30,7 +34,7 @@ def pde(x, y): #here x is the input (x and y coordinates) of the model and y the
     y1_yy = dde.grad.hessian(y, x,component=1, i=1, j=1)
 
     #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
-    xs, ys = 0.17, 7.53
+    xs, ys, _ = ROOM["sources_positions"][SOURCE] #source coordinates in meters
     sigma = 0.1
     dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2
     f = (1 / (sigma * np.sqrt(2 * np.pi))) * torch.exp(-0.5 * dist / sigma**2) #dirac delta approximation with gaussian with mean 0 and small std sigma
@@ -38,23 +42,21 @@ def pde(x, y): #here x is the input (x and y coordinates) of the model and y the
     return [-y0_xx - y0_yy - k ** 2 * y0 - f,
             -y1_xx - y1_yy - k ** 2 * y1] #dirac delta has no imaginary part
 
-fs = 48000 #ISOBEL dataset sampling frequency
-directory = 'ISOBEL_SF_Dataset/Listening Room/ListeningRoom_SoundField_IRs/source_1/'
-
-grid, approximated_freq = create_FFT_grid(directory, fs, target_freq, heights=[100])
+grid, approximated_freq = create_FFT_grid(ROOM, SOURCE, ISOBEL_FS, TARGET_FREQ)
 
 #The input array X_train needs to be an array of (x,y) real-life coordinates in meters
 #We need to convert grid indexes into meters using the room dims, and then reshape them into (x,y) coords
-l_x, l_y = 4.14, 7.80 #room dimensions in meters
-n_x, n_y, _ = grid.shape #32x32 grid
+l_x, l_y, _ = ROOM["room_dimensions"] #room dimensions in meters
+n_x, n_y, _ = grid.shape #32x32x4 grid
 
+#TODO: fix grid
 x_vals = np.linspace(0, l_x, n_x)
 y_vals = np.linspace(0, l_y, n_y)
 
 X, Y = np.meshgrid(x_vals, y_vals, indexing='ij')
 X = np.vstack((X.flatten(), Y.flatten())).T.astype(np.float32)
 
-y = grid.flatten().reshape(-1, 1).astype(np.complex64)
+y = grid[:, :, 0].flatten().reshape(-1, 1).astype(np.complex64) #only the first height (=100cm)
 
 #Split train/test into 80/20
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
