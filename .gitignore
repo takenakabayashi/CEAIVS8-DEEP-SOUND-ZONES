@@ -2,6 +2,7 @@ ISOBEL_SF_Dataset/
 individual_RIRs/
 .vscode/
 *.h5
+VRLAB_Sim_RTFs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

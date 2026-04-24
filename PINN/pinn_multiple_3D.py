@@ -8,6 +8,9 @@ import os
 from sklearn.model_selection import train_test_split
 import torch
 
+from config import SIMULATED_DATA_FILE
+from data_split import get_train_val_test_data
+
 os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
@@ -90,24 +93,19 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1]
 
 #X, y = extract_data_ISOBEL(TARGET_FREQ) for training on ISOBEL data
-X, y = extract_data_simulated(target_freq=TARGET_FREQ, subset=10)
-X, y, valid_mask = filter_zero_targets(X, y)
+train_df, val_df, test_df = get_train_val_test_data(file_path=SIMULATED_DATA_FILE)
 
-removed_points = int((~valid_mask).sum())
-print(f"Filtered out {removed_points} points")
+# Extract data per split
+X_train, y_train = extract_data_simulated(df=train_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
+X_val, y_val = extract_data_simulated(df=val_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
+X_test, y_test = extract_data_simulated(df=test_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
 
-# Split train/test
-X_train, X_holdout, y_train, y_holdout = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+# Filter zeros
+X_train, y_train, mask_train = filter_zero_targets(X_train, y_train)
+X_val, y_val, mask_val = filter_zero_targets(X_val, y_val)
+X_test, y_test, mask_test = filter_zero_targets(X_test, y_test)
 
-#Split again to get test and validation data
-X_val, X_test, y_val, y_test = train_test_split(
-    X_holdout,
-    y_holdout,
-    test_size=1 - val_fraction,
-    random_state=42,
-)
+print(f"Filtered out {int((~mask_train).sum())} train points | {int((~mask_val).sum())} val points | {int((~mask_test).sum())} test points")
 
 y_train_real = np.real(y_train).astype(np.float32)
 y_train_imag = np.imag(y_train).astype(np.float32)

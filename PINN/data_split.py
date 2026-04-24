@@ -1,8 +1,6 @@
 import h5py, os, pandas as pd
 from sklearn.model_selection import train_test_split
 
-#file_path = r'C:\Users\nicol\Desktop\Code Projects\Python\AVS8\CEAIVS8-DEEP-SOUND-ZONES\simulatedData.h5'
-
 def create_pd(file_path):
 
     rows = []
@@ -58,7 +56,7 @@ def create_pd(file_path):
 def get_train_val_test_data(file_path):
     
     # Call function that returns a panda dataframe of the data
-    df = create_pd(file_path=file_path)
+    df = create_pd(file_path)
 
     # Train split: 70%, val/test: 30%
     train_df, temp_df = train_test_split(
@@ -82,29 +80,3 @@ def get_train_val_test_data(file_path):
     test_df = test_df.reset_index(drop=True)
     
     return train_df, val_df, test_df
-
-""" 
-train_df, val_df, test_df = get_train_val_test_data(file_path=file_path)
-
-print(train_df.head())
-
-
-print(len(train_df), len(val_df), len(test_df))
-
-# The following shows the distribution in volume,
-# alpha and T60. The data was split up like this,
-# so both train, val and test got a fair chunk of
-# all sizes 
-
-
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-for col in ["volume", "alpha", "T60"]:
-    plt.figure()
-    sns.kdeplot(train_df[col], label="train")
-    sns.kdeplot(val_df[col], label="val")
-    sns.kdeplot(test_df[col], label="test")
-    plt.title(col)
-    plt.legend()
-    plt.show()  """

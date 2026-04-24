@@ -81,67 +81,49 @@ def extract_data_ISOBEL(target_freq, fs=ISOBEL_FS, rooms = list(ISOBEL_ROOMS.val
 #Same as extract_data_ISOBEL but for the simulated data (stored in a h5 file)
 #X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
 #x,y,z coordinates are normalized between 0 and 1
-def extract_data_simulated(target_freq, file_path=SIMULATED_DATA_FILE, subset=None): #add absorption coeff as input?
+def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, subset=None, max_points_per_room=None): #add absorption coeff as input?
     X_list = []
     y_list = []
 
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File {file_path} not found")
+    with h5py.File(file_path, "r") as f:
+        for _, row in df.iterrows():
+            grp = f[row["room"]]
 
-    with h5py.File(file_path, 'r') as f:
-        #Gets frequency index with value nearest to target_freq
-        first_room = list(f.keys())[0]
-        freqs = f[first_room]['freqs'][0]  #shape (K,)
-        freq_idx = np.abs(freqs - target_freq).argmin()
-        
-        print(f"Extracting data for {freqs[freq_idx]:.2f} Hz")
+            RTF_real = grp["RTF_real"][:]  # (F, S, R)
+            RTF_imag = grp["RTF_imag"][:]
+            receiver_pos = grp["receiver_pos"][:]  # (R, 3)
+            source_pos = grp["source_pos"][:]      # (S, 3)
+            room_dim = grp["room_dim"][0]
+            freqs = grp["freqs"][0]
 
-        #Iterates through each room
-        for room_name in list(f.keys())[:subset] if subset is not None else list(f.keys()):
-            group = f[room_name]
-            
-            #Room constants
-            room_dim = group['room_dim'][0]
-            Lx, Ly, Lz = room_dim
-            
-            source_pos = group['source_pos'][:] #(8, 3)
-            receiver_pos = group['receiver_pos'][:] #(n_receivers, 3)
-            
-            #Loads RTFs for the specific frequency
-            #(K, 8, n_receivers) -> (8, n_receivers)
-            rtf_real = group['RTF_real'][freq_idx, :, :]
-            rtf_imag = group['RTF_imag'][freq_idx, :, :]
-            
-            n_receivers = receiver_pos.shape[0]
+            # Select frequency
+            freq_idx = np.argmin(np.abs(freqs - target_freq))
+            real = RTF_real[freq_idx]
+            imag = RTF_imag[freq_idx]
 
-            #Iterate through sources
-            for s_idx in range(8):
-                xs, ys, zs = source_pos[s_idx]
-                
-                #Normalized receiver coords (0-1)
-                x_norm = receiver_pos[:, 0] / Lx
-                y_norm = receiver_pos[:, 1] / Ly
-                z_norm = receiver_pos[:, 2] / Lz
-                
-                #[x, y, z, Lx, Ly, Lz, xs, ys, zs]
-                X_src = np.zeros((n_receivers, 9))
-                X_src[:, 0] = x_norm
-                X_src[:, 1] = y_norm
-                X_src[:, 2] = z_norm
-                X_src[:, 3] = Lx
-                X_src[:, 4] = Ly
-                X_src[:, 5] = Lz
-                X_src[:, 6] = xs
-                X_src[:, 7] = ys
-                X_src[:, 8] = zs
-                
-                #Targets
-                y_complex = rtf_real[s_idx, :] + 1j * rtf_imag[s_idx, :]
-                
-                X_list.append(X_src)
-                y_list.append(y_complex)
+            # Subsample receivers (IMPORTANT)
+            num_receivers = receiver_pos.shape[0]
+            sample_size = num_receivers if max_points_per_room is None else min(max_points_per_room, num_receivers)
+            idx = np.random.choice(
+                num_receivers,
+                size=sample_size,
+                replace=False
+            )
 
-    X = np.concatenate(X_list, axis=0).astype(np.float32)
-    y = np.concatenate(y_list, axis=0).astype(np.complex64).reshape(-1, 1)
+            receiver_pos = receiver_pos[idx]
 
-    return X, y
+            for s_idx, src in enumerate(source_pos):
+                for rec, r_idx in zip(receiver_pos, idx):
+
+                    # Normalize spatial coords
+                    xyz_norm = rec / room_dim
+
+                    X_list.append([
+                        xyz_norm[0], xyz_norm[1], xyz_norm[2],
+                        room_dim[0], room_dim[1], room_dim[2],
+                        src[0], src[1], src[2],
+                    ])
+
+                    y_list.append(real[s_idx, r_idx] + 1j * imag[s_idx, r_idx])
+
+    return np.array(X_list, dtype=np.float32), np.array(y_list)
