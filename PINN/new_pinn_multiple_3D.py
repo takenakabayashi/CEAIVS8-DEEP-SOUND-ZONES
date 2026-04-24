@@ -21,7 +21,7 @@ import deepxde as dde
 
 os.environ["DDE_BACKEND"] = "pytorch"
 
-from data_split import create_pd, get_train_val_test_data
+from data_split import get_train_val_test_data
 
 # -----------------------------
 # Constants
@@ -82,7 +82,7 @@ def extract_data_simulated(df, file_path):
             real = RTF_real[freq_idx]
             imag = RTF_imag[freq_idx]
 
-            # Subsample receivers (IMPORTANT)
+            # Subsample receivers
             num_receivers = receiver_pos.shape[0]
             idx = np.random.choice(
                 num_receivers,
@@ -158,8 +158,7 @@ def pde(x, y):
 # -----------------------------
 # LOAD + SPLIT 
 # -----------------------------
-df = create_pd(file_path)
-train_df, val_df, test_df = get_train_val_test_data(df)
+train_df, val_df, test_df = get_train_val_test_data(file_path)
 
 print(f"Rooms: train={len(train_df)}, val={len(val_df)}, test={len(test_df)}")
 
