@@ -128,7 +128,7 @@ for nx = 0:nx_max
             
             denom = omega_N^2 - omega.^2 - 2j*delta.*omega;   % [K x 1]
             
-            G = G + (Lambda_N^2 * psi_src * psi_rcv) ./ denom;
+            G = G + (c^2 * Lambda_N^2 * psi_src * psi_rcv) ./ denom;
         end
     end
 end
