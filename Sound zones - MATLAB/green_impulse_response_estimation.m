@@ -2,8 +2,8 @@ clear; clc;
 
 load("absorption_coefficients.mat")
 
-room_dim = absorption.room_dim;
-T60 = mean(absorption.RT60);  % use measured T60 averaged across bands
+room_dim = [9.13, 12.03, 2.6];
+T60 = 0.6;  % constant T60 of 0.6s (from ISOBEL)
 c = 343; % speed of sound
 f_cutoff = 400; % include modes up to 400 Hz (use just lower freqs)
 
@@ -12,28 +12,22 @@ f_min = 30;
 K = 40;
 freqs = f_min * (2^(1/12)).^(0:K-1);
 
-height = 1.0;
+height = 1.9;
 
 sources = [
-    6.65, 7.93, 0; % original source 1 from VRLab
-    5.23, 3.49, 0; % original source 2 from VRLab
-    %0.2,  4.0,  0; % added sources
-    %3.5,  0.2,  0;
-    %6.78, 4.0,  0;
-    %0.2,  7.5,  0;
-    %3.5,  7.93, 0;
-    %0.2,  1.0,  0;
+    0.32, 0.22, 0.15; % original source 1 from VRLab
+    4.48, 4.81, 0.15; % original source 2 from VRLab
 ];
 
 % receiver grid — same layout as in paper
 [idxX, idxY] = meshgrid(2:31, 2:31);
-rx_x = (idxX - 1) * 0.23;
-rx_y = (idxY - 1) * 0.26;
+rx_x = (idxX - 1) * 0.295;
+rx_y = (idxY - 1) * 0.388;
 rx_z = height * ones(size(rx_x));
-rx   = [rx_x(:), rx_y(:), rx_z(:)];
+rx = [rx_x(:), rx_y(:), rx_z(:)];
 
 n_sources = size(sources, 1);
-N_rcv     = size(rx, 1);
+N_rcv = size(rx, 1);
 
 fprintf('Room: [%.2f x %.2f x %.2f]m  T60=%.3fs\n', ...
     room_dim(1), room_dim(2), room_dim(3), T60);
@@ -63,20 +57,20 @@ fprintf('\nSimulation complete.\n');
 
 % save each individual mat file
 for src = 1:n_sources
-    output_dir = sprintf('individual_RTFs/source_%d', src);
+    output_dir = sprintf('individual_RTFs/source_%d/h_%d', src, height * 100);
     mkdir(output_dir);
     fprintf('Saving source %d RTFs...\n', src);
 
     for i = 1:N_rcv
         % reconstruct complex transfer function for this receiver
-        TransferFunction = squeeze(G_all(:, src, i));  % [K x 1] complex
+        RTF = squeeze(G_all(:, src, i));  % [K x 1] complex
 
         rx_pos = rx(i, :);
-        idxY   = mod(i-1, 30) + 2;
-        idxX   = floor((i-1) / 30) + 2;
+        idxY = mod(i-1, 30) + 2;
+        idxX = floor((i-1) / 30) + 2;
 
         filename = fullfile(output_dir, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
-        save(filename, 'TransferFunction', 'freqs', 'rx_pos');
+        save(filename, 'RTF', 'freqs', 'rx_pos');
     end
 
     fprintf('Saved source %d RTFs to "%s"\n', src, output_dir);
@@ -84,54 +78,42 @@ end
 
 %% =========================================================
 function G = greens_function(room_dim, src, rcv_all, freqs, T60, c, f_cutoff)
-% Modal Green's function for a rigid-walled rectangular room.
-% Vectorised over all receiver positions simultaneously.
-%
-% Inputs:
-%   room_dim  : [lx, ly, lz]
-%   src       : [1 x 3] source position
-%   rcv_all   : [N_rcv x 3] receiver positions
-%   freqs     : [1 x K] frequencies in Hz
-%   T60       : reverberation time (s)
-%   c         : speed of sound (m/s)
-%   f_cutoff  : include modes with resonance freq below this (Hz)
-%
-% Output:
-%   G         : [K x N_rcv] complex transfer function
-
-lx = room_dim(1);  ly = room_dim(2);  lz = room_dim(3);
+lx = room_dim(1); ly = room_dim(2); lz = room_dim(3);
 V  = lx * ly * lz;
 
-omega = 2 * pi * freqs(:);    % [K x 1]
-N_rcv = size(rcv_all, 1);
-G     = zeros(length(freqs), N_rcv);
+omega = 2*pi*freqs(:);   % [K x 1]
 
-nx_max = ceil(f_cutoff * lx / c * 2);
-ny_max = ceil(f_cutoff * ly / c * 2);
-nz_max = ceil(f_cutoff * lz / c * 2);
+nx_max = ceil(2 * f_cutoff * lx / c) + 1;
+ny_max = ceil(2 * f_cutoff * ly / c) + 1;
+nz_max = ceil(2 * f_cutoff * lz / c) + 1;
 
+% all mode combinations at once
+[NX, NY, NZ] = ndgrid(0:nx_max, 0:ny_max, 0:nz_max);
+NX = NX(:)'; NY = NY(:)'; NZ = NZ(:)';  % [1 x N_modes]
+
+% filter to modes below f_cutoff
+omega_N = c * pi * sqrt((NX/lx).^2 + (NY/ly).^2 + (NZ/lz).^2);
+valid = omega_N <= (2*pi*f_cutoff);
+NX = NX(valid); NY = NY(valid); NZ = NZ(valid); omega_N = omega_N(valid);  % [1 x M]
+
+% normalisation [1 x M]
+Lambda2 = (1 + (NX > 0)) .* (1 + (NY > 0)) .* (1 + (NZ > 0));
+
+% source shape [1 x M]
+psi_src = cos(NX*pi*src(1)/lx) .* cos(NY*pi*src(2)/ly) .* cos(NZ*pi*src(3)/lz);
+
+% receiver shape [N_rcv x M]
+psi_rcv = cos(NX .* (pi*rcv_all(:,1)/lx)) .* ...
+          cos(NY .* (pi*rcv_all(:,2)/ly)) .* ...
+          cos(NZ .* (pi*rcv_all(:,3)/lz));
+
+% numerator [N_rcv x M]
+numer = (Lambda2 .* psi_src) .* psi_rcv;
+
+% denominator [K x M]
 delta = 3 * log(10) / T60;
+denom = omega_N.^2 - omega.^2 - 2j*delta.*omega;  % [K x 1] broadcast with [1 x M]
 
-for nx = 0:nx_max
-    for ny = 0:ny_max
-        for nz = 0:nz_max
-
-            omega_N = c * pi * sqrt((nx/lx)^2 + (ny/ly)^2 + (nz/lz)^2);
-
-            eps_x = 1 + (nx > 0);
-            eps_y = 1 + (ny > 0);
-            eps_z = 1 + (nz > 0);
-            Lambda_N = sqrt(eps_x * eps_y * eps_z / V);   % proper normalisation
-            
-            psi_src = cos(nx*pi*src(1)/lx) .* cos(ny*pi*src(2)/ly) .* cos(nz*pi*src(3)/lz);
-            psi_rcv = cos(nx*pi*rcv_all(:,1)'/lx) .* cos(ny*pi*rcv_all(:,2)'/ly) .* cos(nz*pi*rcv_all(:,3)'/lz);
-            
-            denom = omega_N^2 - omega.^2 - 2j*delta.*omega;   % [K x 1]
-            
-            G = G + (c^2 * Lambda_N^2 * psi_src * psi_rcv) ./ denom;
-        end
-    end
-end
-
-G = single(-G);
+% sum over modes → [K x N_rcv]
+G = single((c^2 / V) * ((1./denom) * numer.'));
 end
