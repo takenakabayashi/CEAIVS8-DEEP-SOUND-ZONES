@@ -120,15 +120,62 @@ bc_data_imag = dde.icbc.PointSetBC(X_train, y_train_imag, component=1)
 #https://github.com/lululxvi/deepxde/issues/1762#issuecomment-2158327633
 geom = dde.geometry.geometry_nd.Hypercube(xmin=[0] * 9, xmax=[1] * 9)
 
+# ROBIN BOUNDARY CONDITION
+def boundary_fn(x, on_boundary): # this assumes that all floors, wall, and ceiling has the same absorption properties
+    return on_boundary
+
+def compute_impedance(abs_coeff):
+    abs_coeff = np.clip(abs_coeff, 1e-5, 0.999) # full 0 or 1 might give issues
+    impedance = (1 + np.sqrt(1 - abs_coeff)) / (1 - np.sqrt(1 - abs_coeff))
+    return impedance
+
+abs_coeff = 0.3 # placeholder, until we also gather absorption from the data
+Z = compute_impedance(abs_coeff)
+# a = 1.0 / Z
+# b = 1.0
+k_over_Z = k / Z
+
+def robin_real(x, y, X):
+    grad_u_r = dde.grad.jacobian(y, x, i=0)  # du_r
+
+    # we only want to use the coordinates, not room dimensions and source position
+    normal_full = dde.geometry.boundary_normal(X)
+    normal = normal_full[:, 0:3]
+    grad_u_r = grad_u_r[:, 0:3]
+
+    dur_dn = torch.sum(grad_u_r * normal, dim=1, keepdim=True)
+
+    u_i = y[:, 1:2]
+
+    return dur_dn - k_over_Z * u_i
+
+def robin_imag(x, y, X):
+    grad_u_i = dde.grad.jacobian(y, x, i=1)  # du_i
+
+    # we only want to use the coordinates, not room dimensions and source position
+    normal_full = dde.geometry.boundary_normal(X)
+    normal = normal_full[:, 0:3]
+    grad_u_i = grad_u_i[:, 0:3]
+
+    dui_dn = torch.sum(grad_u_i * normal, dim=1, keepdim=True)
+
+    u_r = y[:, 0:1]
+
+    return dui_dn + k_over_Z * u_r
+
+# dde.icbc.RobinBC() connot represent complex coupling, so we have to do this
+bc_robin_real = dde.icbc.OperatorBC(geom, robin_real, boundary_fn)
+bc_robin_imag = dde.icbc.OperatorBC(geom, robin_imag, boundary_fn)
+
 y_val_targets = stack_complex_targets(y_val)
 
 data = ValidationPDE(
     geom,
     pde,
-    [bc_data_real, bc_data_imag],
+    [bc_data_real, bc_data_imag, bc_robin_real, bc_robin_imag], # also include robin here
     num_domain=10000,
-    num_boundary=0,
-    anchors=X_train,
+    num_boundary=1000, # high number=slow+precise, low number=fast+inaccurate
+    # anchors=X_train, # not good to have when resampling
     validation_x=X_val,
     validation_y=y_val_targets,
 )
@@ -137,17 +184,24 @@ net = dde.nn.FNN([9] + [50] * 3 + [2], "tanh", "Glorot uniform")
 model = dde.Model(data, net)
 
 model.compile(
-    "adam", 
+    "adam", # we can further fine-tune with 'L-BFGS'
     lr=1e-3, 
     loss="MSE", 
-    loss_weights=[1, 1, 100, 100],
+    loss_weights=[1, 1, 100, 100], # seems a bit aggresive, but it's sota
     metrics=[validation_nmse_metric],
     )
+
+resampler = dde.callbacks.PDEPointResampler(
+    period=500,
+    pde_points=True,
+    bc_points=False  # keeps PointSetBC stable (anchor points)
+)
 
 losshistory, train_state = model.train(
     iterations=10000,
     display_every=1000,
     batch_size=128,
+    callbacks=[resampler],
 )
 
 #Model evaluation
