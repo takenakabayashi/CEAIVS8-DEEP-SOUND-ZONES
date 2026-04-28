@@ -78,12 +78,29 @@ def extract_data_ISOBEL(target_freq, fs=ISOBEL_FS, rooms = list(ISOBEL_ROOMS.val
     
     return X_tot, y_tot
 
+def get_max_min_room_dims(file_path=SIMULATED_DATA_FILE):
+    Lx_min, Ly_min, Lz_min = float('inf'), float('inf'), float('inf')
+    Lx_max, Ly_max, Lz_max = float('-inf'), float('-inf'), float('-inf')
+
+    with h5py.File(file_path, "r") as f:
+        for room in f.keys():
+            Lx, Ly, Lz = f[room]["room_dim"][0]
+
+            Lx_min, Ly_min, Lz_min = min(Lx_min, Lx), min(Ly_min, Ly), min(Lz_min, Lz)
+            Lx_max, Ly_max, Lz_max = max(Lx_max, Lx), max(Ly_max, Ly), max(Lz_max, Lz)
+
+    return [Lx_min, Ly_min, Lz_min], [Lx_max, Ly_max, Lz_max]
+
 #Same as extract_data_ISOBEL but for the simulated data (stored in a h5 file)
 #X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
 #x,y,z coordinates are normalized between 0 and 1
-def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, subset=None, max_points_per_room=None): #add absorption coeff as input?
+def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, max_points_per_room=None): #add absorption coeff as input?
     X_list = []
     y_list = []
+
+    min_room_dims, max_room_dims = get_max_min_room_dims(file_path)
+    min_room_dims = np.array(min_room_dims)
+    max_room_dims = np.array(max_room_dims)
 
     with h5py.File(file_path, "r") as f:
         for _, row in df.iterrows():
@@ -116,14 +133,16 @@ def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, subse
                 for rec, r_idx in zip(receiver_pos, idx):
 
                     # Normalize spatial coords
-                    xyz_norm = rec / room_dim
+                    xyz_norm = rec / room_dim 
+                    src_norm = src / room_dim
+                    room_norm = (room_dim - min_room_dims) / (max_room_dims - min_room_dims)
 
                     X_list.append([
                         xyz_norm[0], xyz_norm[1], xyz_norm[2],
-                        room_dim[0], room_dim[1], room_dim[2],
-                        src[0], src[1], src[2],
+                        room_norm[0], room_norm[1], room_norm[2],
+                        src_norm[0], src_norm[1], src_norm[2],
                     ])
 
                     y_list.append(real[s_idx, r_idx] + 1j * imag[s_idx, r_idx])
 
-    return np.array(X_list, dtype=np.float32), np.array(y_list)
+    return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.complex64)

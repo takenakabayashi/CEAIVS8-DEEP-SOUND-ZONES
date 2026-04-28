@@ -5,7 +5,6 @@ It takes normalized x,y,z coordinates, room dimensions and source position as in
 TODO: add room absorption parameter, add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
-from sklearn.model_selection import train_test_split
 import torch
 
 from config import SIMULATED_DATA_FILE
@@ -15,7 +14,7 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import extract_data_ISOBEL, extract_data_simulated
+from data_extraction import extract_data_ISOBEL, extract_data_simulated, get_max_min_room_dims
 from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
 
 TARGET_FREQ = 41 #Hz
@@ -25,6 +24,10 @@ val_fraction = 0.5
 c = 343.0 #m/s
 omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
+
+L_min, L_max = get_max_min_room_dims(file_path=SIMULATED_DATA_FILE)
+L_min = torch.tensor(L_min)
+L_max = torch.tensor(L_max)
 
 #dde.data.PDE wrapper
 #The only thing this does is change the printing statements during training to print validation loss and test metric
@@ -63,11 +66,11 @@ class ValidationPDE(dde.data.PDE):
 #Helmholtz PDE implementation from https://deepxde.readthedocs.io/en/latest/demos/pinn_forward/helmholtz.2d.sound.hard.abc.html#helmholtz-sound-hard-scattering-problem-with-absorbing-boundary-conditions
 #inhomogeneous helmholtz equation because the source is inside the domain
 def pde(x, y):  #here x is the input (x and y coordinates) of the model and y the output (pressure)
-    Lx = x[:, 3:4]
-    Ly = x[:, 4:5]
-    Lz = x[:, 5:6]
-
     y0, y1 = y[:, 0:1], y[:, 1:2] #y0 is the real part of the pressure, y1 the imaginary part
+    
+    Lx = x[:, 3:4] * (L_max[0] - L_min[0]) + L_min[0]
+    Ly = x[:, 4:5] * (L_max[1] - L_min[1]) + L_min[1]
+    Lz = x[:, 5:6] * (L_max[2] - L_min[2]) + L_min[2]
 
     #Divide by dimension^2 because of previous normalization of coordinates (chain rule)
     y0_xx = dde.grad.hessian(y, x, component=0, i=0, j=0) / (Lx ** 2)
@@ -78,15 +81,19 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1) / (Ly ** 2)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2) / (Lz ** 2)
 
-    #Source distance in meters
-    abs_x = x[:, 0:1] * Lx
-    abs_y = x[:, 1:2] * Ly
-    abs_z = x[:, 2:3] * Lz
+    #Point coordinates in meters
+    x = x[:, 0:1] * Lx
+    y = x[:, 1:2] * Ly
+    z = x[:, 2:3] * Lz
+
+    #Source coordinates in meters
+    xs = x[:, 6:7] * Lx
+    ys = x[:, 7:8] * Ly
+    zs = x[:, 8:9] * Lz
 
     #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
-    xs, ys, zs = x[:, 6:7], x[:, 7:8], x[:, 8:9] #source coordinates in meters
     sigma = 0.1
-    dist = (abs_x - xs)**2 + (abs_y - ys)**2 + (abs_z - zs)**2
+    dist = (x - xs)**2 + (y - ys)**2 + (z - zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 
 
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
@@ -126,7 +133,7 @@ data = ValidationPDE(
     geom,
     pde,
     [bc_data_real, bc_data_imag],
-    num_domain=10000,
+    num_domain=1000,
     num_boundary=0,
     anchors=X_train,
     validation_x=X_val,
@@ -140,7 +147,7 @@ model.compile(
     "adam", 
     lr=1e-3, 
     loss="MSE", 
-    loss_weights=[1, 1, 100, 100],
+    loss_weights=[1, 1, 100, 100], #pde real, pde imag, data real, data imag
     metrics=[validation_nmse_metric],
     )
 
