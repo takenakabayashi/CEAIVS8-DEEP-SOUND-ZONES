@@ -1,6 +1,7 @@
 ISOBEL_SF_Dataset/
 individual_RIRs/
 sim/
+new simulated data/
 VRLAB_Sim_RTFs/
 .vscode/
 *.h5

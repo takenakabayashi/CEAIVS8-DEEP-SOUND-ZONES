@@ -81,25 +81,24 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1) / (Ly ** 2)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2) / (Lz ** 2)
 
-    #Point coordinates in meters
-    x = x[:, 0:1] * Lx
-    y = x[:, 1:2] * Ly
-    z = x[:, 2:3] * Lz
+    # Point coordinates in meters
+    pos_x = x[:, 0:1] * Lx
+    pos_y = x[:, 1:2] * Ly
+    pos_z = x[:, 2:3] * Lz
 
-    #Source coordinates in meters
-    xs = x[:, 6:7] * Lx
-    ys = x[:, 7:8] * Ly
-    zs = x[:, 8:9] * Lz
+    # Source coordinates in meters
+    pos_xs = x[:, 6:7] * Lx
+    pos_ys = x[:, 7:8] * Ly
+    pos_zs = x[:, 8:9] * Lz
 
     #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
     sigma = 0.1
-    dist = (x - xs)**2 + (y - ys)**2 + (z - zs)**2
+    dist = (pos_x - pos_xs)**2 + (pos_y - pos_ys)**2 + (pos_z - pos_zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 
 
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1]
 
-#X, y = extract_data_ISOBEL(TARGET_FREQ) for training on ISOBEL data
 train_df, val_df, test_df = get_train_val_test_data(file_path=SIMULATED_DATA_FILE)
 
 # Extract data per split

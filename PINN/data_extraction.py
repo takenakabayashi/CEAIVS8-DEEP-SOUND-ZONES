@@ -145,4 +145,7 @@ def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, max_p
 
                     y_list.append(real[s_idx, r_idx] + 1j * imag[s_idx, r_idx])
 
-    return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.complex64)
+    X = np.array(X_list, dtype=np.float32)
+    y = np.array(y_list, dtype=np.complex64).reshape(-1, 1)
+    
+    return X, y
