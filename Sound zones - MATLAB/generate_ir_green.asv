@@ -25,9 +25,6 @@ Imp = filter(Bhp,Ahp,Imp);
 Imp = filter(Blp,Alp,Imp);
 FreqWin = fft(Imp,2*K);
 FreqWin = FreqWin(1:K);
-FreqWin = FreqWin(:);
-
-f_cutoff = 1.5 * f_lowpass;
 
 x_min = 3.5;  x_max = 10.0;
 z_min = 1.5;  z_max = 3.5;
@@ -111,9 +108,6 @@ parfor i = 1:N_rooms
     for s = 1:8
         RTF_all(:, s, :) = greens_function(room_dim, source_pos(s,:), receiver_pos, freqs, T60, c, f_cutoff);
     end
-
-    % zero the DC bin
-    RTF_all(1, :, :) = 0;
 
     RTF_all = RTF_all .* FreqWin;
 
