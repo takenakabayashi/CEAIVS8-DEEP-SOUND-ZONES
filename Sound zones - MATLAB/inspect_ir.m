@@ -3,34 +3,29 @@ clear; clc;
 room_name = "ListeningRoom";
 src_idx = 1;
 height = 1.0;
-
 idxX_pick = 16;
 idxY_pick = 16;
 
 filename = sprintf('ISOBEL_RTFs/%s_RTFs/source_%d/h_%d/idxX_%d_idxY_%d.mat', ...
     room_name, src_idx, height * 100, idxX_pick, idxY_pick);
-d = load(filename);
 
-RTF = d.RTF(:);
-freqs = d.freqs;
+d = load(filename);
+RTF = double(d.RTF(:));
+freqs = double(d.freqs(:));
 rx_pos = d.rx_pos;
+
+% flipping time 
+RTF = conj(RTF);
 
 K = numel(RTF);
 Fs = 1000; % sampling freq
 duration = 1.0;
-N = Fs * duration;
-df = 1 / duration;
+N = 2 * K;
+df = Fs / N;
 
-assert(N == 2*K, 'N must equal 2*K for this layout');
-
-% build the full spectrum
-H_full = zeros(N ,1);
-H_full(1) = 0; % set DC to 0
-H_full(2:K) = RTF(2:K); % positive frequencies
-H_full(K+1) = 0; % nyquist bin
-H_full(K+2:N) = conj(flipud(RTF(2:K))); % mirror conjugate for neg freqs
-
-% ifft to time domain
+% 3. Build Hermitian spectrum (your construction is correct)
+RTF(1) = real(RTF(1)); % enforcing real DC
+H_full = [RTF; 0; conj(flipud(RTF(2:end)))];
 h = ifft(H_full, 'symmetric');
 
 fprintf('Receiver pos: [%.2f, %.2f, %.2f]\n', rx_pos);
@@ -40,8 +35,11 @@ fprintf('Max |h|: %.4e\n', max(abs(h)));
 fprintf('Mean(h): %.4e\n', mean(h));
 fprintf('Any NaN/Inf: %d\n', any(~isfinite(h)));
 
+[~, kpk] = max(abs(h));
+fprintf('Peak at: sample %d (%.1f ms)\n', kpk, (kpk - 1) / Fs * 1000);
+
 % plots
-t = (0:N-1) / Fs;
+t = (0:N-1).' / Fs;
 
 figure('Position', [100 100 1000 700]);
 
@@ -51,13 +49,17 @@ plot(t, h, 'b'); hold on;
 % expected exponential decay envelope from T60
 T60 = 0.6;
 delta = 3 * log(10) / T60;
-env = max(abs(h)) * exp(-delta * t);
+[pk, kpk] = max(abs(h));
+t_pk = (kpk - 1) / Fs;
+env = pk * exp(-delta * (t - t_pk));
+env(t < t_pk) = NaN;
 plot(t, env, 'r--', 'LineWidth', 1);
 plot(t, -env, 'r--', 'LineWidth', 1);
 xlabel('Time [s]'); ylabel('Amplitude');
 title(sprintf('Impulse response — %s, src %d, rcv [%.1f, %.1f, %.1f]', ...
     room_name, src_idx, rx_pos));
-legend('h(t)', sprintf('exp(-t·3ln10/T60), T60=%.2fs', T60));
+legend('h(t)', sprintf('\\pm A_{peak}·exp(-(t-t_{peak})·3ln10/T60), T60=%.2fs', T60), ...
+       'Location', 'northeast');
 grid on;
 
 % zoomed in onset
@@ -74,9 +76,9 @@ grid on;
 % magnitude spectrum check (should match RTF magnitude)
 subplot(3,1,3);
 H_check = fft(h);
-plot(freqs, abs(RTF), 'b', 'LineWidth', 1.5); hold on;
-plot(freqs, abs(H_check(1:K)), 'r--');
-xlabel('Frequency [Hz]'); ylabel('|H(f)|');
-title('Spectrum sanity check (blue: original RTF, red dashed: FFT of IFFT)');
-legend('original |RTF|', '|FFT(h)|');
-grid on; xlim([0 500]);
+plot(freqs, 20*log10(abs(RTF) + eps), 'b', 'LineWidth', 1.2); hold on;
+plot(freqs, 20*log10(abs(H_check(1:K)) + eps), 'r--');
+xlabel('Frequency [Hz]'); ylabel('|H(f)| [dB]');
+title('Spectrum sanity check (blue: original |RTF|, red dashed: |FFT(h)|)');
+legend('original |RTF|', '|FFT(h)|', 'Location', 'southwest');
+grid on; xlim([0 Fs/2]);
