@@ -5,7 +5,6 @@ It takes normalized x,y,z coordinates, room dimensions and source position as in
 TODO: add room absorption parameter, add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
-from sklearn.model_selection import train_test_split
 import torch
 
 from config import SIMULATED_DATA_FILE
@@ -15,7 +14,7 @@ os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import extract_data_ISOBEL, extract_data_simulated
+from data_extraction import extract_data_ISOBEL, extract_data_simulated, get_max_min_room_dims
 from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
 
 TARGET_FREQ = 41 #Hz
@@ -25,6 +24,10 @@ val_fraction = 0.5
 c = 343.0 #m/s
 omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
+
+L_min, L_max = get_max_min_room_dims(file_path=SIMULATED_DATA_FILE)
+L_min = torch.tensor(L_min)
+L_max = torch.tensor(L_max)
 
 #dde.data.PDE wrapper
 #The only thing this does is change the printing statements during training to print validation loss and test metric
@@ -63,11 +66,11 @@ class ValidationPDE(dde.data.PDE):
 #Helmholtz PDE implementation from https://deepxde.readthedocs.io/en/latest/demos/pinn_forward/helmholtz.2d.sound.hard.abc.html#helmholtz-sound-hard-scattering-problem-with-absorbing-boundary-conditions
 #inhomogeneous helmholtz equation because the source is inside the domain
 def pde(x, y):  #here x is the input (x and y coordinates) of the model and y the output (pressure)
-    Lx = x[:, 3:4]
-    Ly = x[:, 4:5]
-    Lz = x[:, 5:6]
-
     y0, y1 = y[:, 0:1], y[:, 1:2] #y0 is the real part of the pressure, y1 the imaginary part
+    
+    Lx = x[:, 3:4] * (L_max[0] - L_min[0]) + L_min[0]
+    Ly = x[:, 4:5] * (L_max[1] - L_min[1]) + L_min[1]
+    Lz = x[:, 5:6] * (L_max[2] - L_min[2]) + L_min[2]
 
     #Divide by dimension^2 because of previous normalization of coordinates (chain rule)
     y0_xx = dde.grad.hessian(y, x, component=0, i=0, j=0) / (Lx ** 2)
@@ -78,21 +81,24 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1) / (Ly ** 2)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2) / (Lz ** 2)
 
-    #Source distance in meters
-    abs_x = x[:, 0:1] * Lx
-    abs_y = x[:, 1:2] * Ly
-    abs_z = x[:, 2:3] * Lz
+    #Point coordinates in meters
+    pos_x = x[:, 0:1] * Lx
+    pos_y = x[:, 1:2] * Ly
+    pos_z = x[:, 2:3] * Lz
+
+    #Source coordinates in meters
+    pos_xs = x[:, 6:7] * Lx
+    pos_ys = x[:, 7:8] * Ly
+    pos_zs = x[:, 8:9] * Lz
 
     #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
-    xs, ys, zs = x[:, 6:7], x[:, 7:8], x[:, 8:9] #source coordinates in meters
     sigma = 0.1
-    dist = (abs_x - xs)**2 + (abs_y - ys)**2 + (abs_z - zs)**2
+    dist = (pos_x - pos_xs)**2 + (pos_y - pos_ys)**2 + (pos_z - pos_zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 
 
     return [-y0_xx - y0_yy - y0_zz - k ** 2 * y0 - f,
             -y1_xx - y1_yy - y1_zz - k ** 2 * y1]
 
-#X, y = extract_data_ISOBEL(TARGET_FREQ) for training on ISOBEL data
 train_df, val_df, test_df = get_train_val_test_data(file_path=SIMULATED_DATA_FILE)
 
 # Extract data per split
@@ -122,10 +128,15 @@ geom = dde.geometry.geometry_nd.Hypercube(xmin=[0] * 9, xmax=[1] * 9)
 
 # ROBIN BOUNDARY CONDITION
 def boundary_fn(x, on_boundary): # this assumes that all floors, wall, and ceiling has the same absorption properties
-    return on_boundary
+    eps = 1e-6
+    return on_boundary and (
+        abs(x[0]) < eps or abs(x[0] - 1) < eps or
+        abs(x[1]) < eps or abs(x[1] - 1) < eps or
+        abs(x[2]) < eps or abs(x[2] - 1) < eps
+    )
 
 def compute_impedance(abs_coeff):
-    abs_coeff = np.clip(abs_coeff, 1e-5, 0.999) # full 0 or 1 might give issues
+    abs_coeff = np.clip(abs_coeff, 1e-6, 0.9999) # since full 0 or 1 might give issues
     impedance = (1 + np.sqrt(1 - abs_coeff)) / (1 - np.sqrt(1 - abs_coeff))
     return impedance
 
@@ -135,29 +146,64 @@ Z = compute_impedance(abs_coeff)
 # b = 1.0
 k_over_Z = k / Z
 
-def robin_real(x, y, X):
+def get_physical_normal(X):
+    # X in normalized [0,1]
+    eps = 1e-6
+
+    norm_x = torch.where(torch.abs(X[:, 0:1]) < eps, -1.0,
+                torch.where(torch.abs(X[:, 0:1] - 1) < eps, 1.0, 0.0))
+    
+    norm_y = torch.where(torch.abs(X[:, 1:2]) < eps, -1.0,
+                torch.where(torch.abs(X[:, 1:2] - 1) < eps, 1.0, 0.0))
+    
+    norm_z = torch.where(torch.abs(X[:, 2:3]) < eps, -1.0,
+                torch.where(torch.abs(X[:, 2:3] - 1) < eps, 1.0, 0.0))
+
+    return torch.cat([norm_x, norm_y, norm_z], dim=1)
+
+def robin_real(x, y):
+    Lx = x[:, 3:4] * (L_max[0] - L_min[0]) + L_min[0]
+    Ly = x[:, 4:5] * (L_max[1] - L_min[1]) + L_min[1]
+    Lz = x[:, 5:6] * (L_max[2] - L_min[2]) + L_min[2]
+
     grad_u_r = dde.grad.jacobian(y, x, i=0)  # du_r
+    grad_u_r[:, 0:1] /= Lx
+    grad_u_r[:, 1:2] /= Ly
+    grad_u_r[:, 2:3] /= Lz
+    grad_u_r = grad_u_r[:, 0:3] # we do not want the rest of the 9d hypercube to stay in memory
 
     # we only want to use the coordinates, not room dimensions and source position
-    normal_full = dde.geometry.boundary_normal(X)
-    normal = normal_full[:, 0:3]
-    grad_u_r = grad_u_r[:, 0:3]
+    normal = get_physical_normal(x)
 
-    dur_dn = torch.sum(grad_u_r * normal, dim=1, keepdim=True)
+    # the boundary point might be a corner and ruin the normal
+    normal_norm = torch.norm(normal, dim=1, keepdim=True) + 1e-12
+    normal = normal / normal_norm
+
+    dur_dn = torch.sum(grad_u_r * normal, dim=1, keepdim=True) # du_r / dn
 
     u_i = y[:, 1:2]
 
     return dur_dn - k_over_Z * u_i
 
-def robin_imag(x, y, X):
+def robin_imag(x, y):
+    Lx = x[:, 3:4] * (L_max[0] - L_min[0]) + L_min[0]
+    Ly = x[:, 4:5] * (L_max[1] - L_min[1]) + L_min[1]
+    Lz = x[:, 5:6] * (L_max[2] - L_min[2]) + L_min[2]
+    
     grad_u_i = dde.grad.jacobian(y, x, i=1)  # du_i
+    grad_u_i[:, 0:1] /= Lx
+    grad_u_i[:, 1:2] /= Ly
+    grad_u_i[:, 2:3] /= Lz
+    grad_u_r = grad_u_r[:, 0:3] # we do not want the rest of the 9d hypercube to stay in memory
 
     # we only want to use the coordinates, not room dimensions and source position
-    normal_full = dde.geometry.boundary_normal(X)
-    normal = normal_full[:, 0:3]
-    grad_u_i = grad_u_i[:, 0:3]
+    normal = get_physical_normal(x)
 
-    dui_dn = torch.sum(grad_u_i * normal, dim=1, keepdim=True)
+    # the boundary point might be a corner and ruin the normal
+    normal_norm = torch.norm(normal, dim=1, keepdim=True) + 1e-12
+    normal = normal / normal_norm
+
+    dui_dn = torch.sum(grad_u_i * normal, dim=1, keepdim=True) # du_i / dn
 
     u_r = y[:, 0:1]
 
@@ -173,8 +219,8 @@ data = ValidationPDE(
     geom,
     pde,
     [bc_data_real, bc_data_imag, bc_robin_real, bc_robin_imag], # also include robin here
-    num_domain=10000,
-    num_boundary=1000, # high number=slow+precise, low number=fast+inaccurate
+    num_domain=1000,
+    num_boundary=500, # high number=slow+precise, low number=fast+inaccurate
     # anchors=X_train, # not good to have when resampling
     validation_x=X_val,
     validation_y=y_val_targets,
@@ -187,7 +233,7 @@ model.compile(
     "adam", # we can further fine-tune with 'L-BFGS'
     lr=1e-3, 
     loss="MSE", 
-    loss_weights=[1, 1, 100, 100], # seems a bit aggresive, but it's sota
+    loss_weights=[1, 1, 100, 100], # pde real, pde imag, data real, data imag
     metrics=[validation_nmse_metric],
     )
 
