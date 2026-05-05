@@ -49,7 +49,6 @@ grid, approximated_freq = create_FFT_grid(ROOM, SOURCE, ISOBEL_FS, TARGET_FREQ)
 l_x, l_y, _ = ROOM["room_dimensions"] #room dimensions in meters
 n_x, n_y, _ = grid.shape #32x32x4 grid
 
-#TODO: fix grid
 x_vals = np.linspace(0, l_x, n_x)
 y_vals = np.linspace(0, l_y, n_y)
 

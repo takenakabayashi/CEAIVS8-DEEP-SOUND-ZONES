@@ -1,10 +1,11 @@
 """ 
-Single room approach: PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points. Currently using listening room.
-Currently uses one source (hard-coded) and all heights, modeled as a 3D problem.
+Single room approach: PINN model to predict FFT of the impulse responses along a 32x32 grid for one specific room, given n_mic training points.
+Currently uses one source and all heights, modeled as a 3D problem.
 It takes x,y,z coordinates as input, output is the predicted real and imaginary part of the FFT at the specified target frequency.
 TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import torch
 os.environ["DDE_BACKEND"] = "pytorch"
@@ -16,7 +17,7 @@ from utils import filter_zero_targets, nmse_db, stack_complex_targets, validatio
 from config import ISOBEL_FS, ISOBEL_ROOMS
 
 TARGET_FREQ = 41 #Hz
-ROOM = ISOBEL_ROOMS["LR"]
+ROOM = ISOBEL_ROOMS["VR"] #VR Lab
 SOURCE = 1
 
 n_mic = 15 #number of points used for training
@@ -155,3 +156,7 @@ y_test = y_test_real + 1j * y_test_imag
 
 nmse_db_val = nmse_db(y_test, y_pred)
 print(f"Test NMSE: {nmse_db_val:.2f} dB")
+
+dde.utils.external.save_loss_history(losshistory, "loss.dat")
+dde.utils.plot_loss_history(losshistory)
+plt.show()

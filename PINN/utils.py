@@ -50,8 +50,6 @@ def compute_fft_at_target_freq(x, fs, target_freq):
     return X[idx], freq[idx] #returns the FFT value at the closest sampled frequency (freq[idx]) to the target frequency
 
 #Creates a 32x32xlen(heights) grid of the FFT values at a target frequency for each impulse response for all specified heights
-#NOTE: we are using a 32x32 grid with indexes 0-31, but in the ISOBEL measurements reports the points are at the intersection of the tiles, not on the tiles themselves, so it's actually a 31x31 grid?
-#TODO: fix the grid
 def create_FFT_grid(room: dict, source, fs, target_freq):
     grid = np.zeros(room["grid_size"], dtype=complex)
 

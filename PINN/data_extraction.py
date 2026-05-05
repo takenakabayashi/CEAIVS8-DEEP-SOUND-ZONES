@@ -6,17 +6,16 @@ from utils import create_FFT_grid
 from config import ISOBEL_FS, ISOBEL_ROOMS, SIMULATED_DATA_FILE
 
 def extract_grid(room, source, fs, target_freq):
-    grid, approximated_freq = create_FFT_grid(room, source, fs, target_freq)
+    grid, _ = create_FFT_grid(room, source, fs, target_freq)
 
     #The input array X needs to be an array of (x,y,z) real-life coordinates in meters
     #We need to convert grid indexes into meters using the room dims, and then reshape them into (x,y,z) coords
-    l_x, l_y, l_z = room["room_dimensions"] #room dimensions in meters
-    n_x, n_y, n_z = grid.shape
+    l_x, l_y, _ = room["room_dimensions"] #room dimensions in meters
+    n_x, n_y, _ = grid.shape
 
-    #TODO: fix the spacing, explained in the comment in create_FFT_grid function in utils.py
     x_vals = np.linspace(0, l_x, n_x)
     y_vals = np.linspace(0, l_y, n_y)
-    z_vals = np.linspace(0, l_z, n_z)
+    z_vals = [h / 100.0 for h in room["heights"]] #convert heights from cm to meters
 
     X, Y, Z = np.meshgrid(x_vals, y_vals, z_vals, indexing='ij')
     X = np.vstack((X.flatten(), Y.flatten(), Z.flatten())).T.astype(np.float32)

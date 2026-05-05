@@ -12,7 +12,7 @@ ISOBEL_ROOMS = {
     "LR": {
         "name": "Listening Room",
         "directory": ISOBEL_DATASET_DIR / "Listening Room" / "ListeningRoom_SoundField_IRs",
-        "sources_positions": [(0.17, 7.53, 1.0), (1.42, 2.08, 1.0)],
+        "sources_positions": [(0.17, 7.53, 0.1), (1.42, 2.08, 0.1)],
         "room_dimensions": (4.14, 7.80, 2.78),
         "grid_size": (32, 32, 4),
         "heights": [100, 130, 160, 190],
@@ -20,7 +20,7 @@ ISOBEL_ROOMS = {
     "VR": {
         "name": "VR Lab",
         "directory": ISOBEL_DATASET_DIR / "VR Lab" / "VRLab_SoundField_IRs",
-        "sources_positions": [(6.65, 7.93, 1.0), (5.23, 3.49, 1.0)],
+        "sources_positions": [(6.65, 7.93, 0.1), (5.23, 3.49, 0.1)],
         "room_dimensions": (6.98, 8.12, 3.03),
         "grid_size": (32, 32, 4),
         "heights": [100, 130, 160, 190],
@@ -28,7 +28,7 @@ ISOBEL_ROOMS = {
     "PR": {
         "name": "Product Room",
         "directory": ISOBEL_DATASET_DIR / "Product Room" / "ProductRoom_SoundField_IRs",
-        "sources_positions": [(0.32, 0.22, 1.0), (4.48, 4.81, 1.0)],
+        "sources_positions": [(0.32, 0.22, 0.1), (4.48, 4.81, 0.1)],
         "room_dimensions": (9.13, 12.03, 2.60),
         "grid_size": (32, 32, 3),
         "heights": [130, 160, 190],
