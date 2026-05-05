@@ -109,13 +109,6 @@ X_train, y_train = extract_data_simulated(df=train_df, target_freq=TARGET_FREQ, 
 X_val, y_val = extract_data_simulated(df=val_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
 X_test, y_test = extract_data_simulated(df=test_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
 
-# Filter zeros
-X_train, y_train, mask_train = filter_zero_targets(X_train, y_train)
-X_val, y_val, mask_val = filter_zero_targets(X_val, y_val)
-X_test, y_test, mask_test = filter_zero_targets(X_test, y_test)
-
-print(f"Filtered out {int((~mask_train).sum())} train points | {int((~mask_val).sum())} val points | {int((~mask_test).sum())} test points")
-
 y_train_real = np.real(y_train).astype(np.float32)
 y_train_imag = np.imag(y_train).astype(np.float32)
 

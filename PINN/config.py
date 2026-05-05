@@ -4,7 +4,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 #Edit these to your own dataset paths
 ISOBEL_DATASET_DIR = PROJECT_ROOT / "ISOBEL_SF_Dataset"
-SIMULATED_DATA_FILE = PROJECT_ROOT / "simulatedData.h5"
+SIMULATED_DATA_FILE = PROJECT_ROOT / "rooms_500.h5"
 
 ISOBEL_FS = 48000 #Hz, ISOBEL dataset sampling frequency
 

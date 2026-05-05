@@ -20,8 +20,8 @@ def nmse_db(y_true, y_pred):
     
     return nmse_db
 
-#filter out points with pressure (approximately) equal to zero
-def filter_zero_targets(X, y, magnitude_threshold=1e-8):
+#filter out points with pressure equal to zero
+def filter_zero_targets(X, y, magnitude_threshold=0):
     target_magnitude = np.abs(y).flatten()
     valid_mask = target_magnitude > magnitude_threshold
 
