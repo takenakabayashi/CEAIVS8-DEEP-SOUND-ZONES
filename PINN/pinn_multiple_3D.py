@@ -5,6 +5,7 @@ It takes normalized x,y,z coordinates, room dimensions and source position as in
 TODO: add room absorption parameter, add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
+from matplotlib import pyplot as plt
 import torch
 
 from config import SIMULATED_DATA_FILE
@@ -60,6 +61,8 @@ class ValidationPDE(dde.data.PDE):
         loss_imag = imag_loss_fn(targets[:, 1:2], outputs[:, 1:2])
         displayed_loss_real = loss_real
         displayed_loss_imag = loss_imag
+
+        #print(f"GPU memory: {torch.cuda.memory_allocated()/1e9:.2f} GB")
 
         return [pde_loss_real, pde_loss_imag, displayed_loss_real, displayed_loss_imag]
     
@@ -174,3 +177,7 @@ y_test = y_test_real + 1j * y_test_imag
 
 nmse = nmse_db(y_test, y_pred)
 print(f"Test NMSE: {nmse:.2f} dB")
+
+dde.utils.external.save_loss_history(losshistory, "loss.dat")
+dde.utils.plot_loss_history(losshistory)
+plt.show()
