@@ -16,7 +16,7 @@ from config import ISOBEL_FS, ISOBEL_ROOMS
 
 TARGET_FREQ = 41 #Hz
 ROOM = ISOBEL_ROOMS["LR"]
-SOURCE = 1
+SOURCE = 1 #1 or 2 for ISOBEL (two sources)
 
 c = 343.0 #m/s
 omega = 2 * np.pi * TARGET_FREQ
@@ -34,7 +34,7 @@ def pde(x, y): #here x is the input (x and y coordinates) of the model and y the
     y1_yy = dde.grad.hessian(y, x,component=1, i=1, j=1)
 
     #f = delta(x-xs) models a point source at location xs, source: https://arxiv.org/pdf/1712.06091
-    xs, ys, _ = ROOM["sources_positions"][SOURCE] #source coordinates in meters
+    xs, ys, _ = ROOM["sources_positions"][SOURCE - 1] #source coordinates in meters
     sigma = 0.1
     dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2
     f = (1 / (sigma * np.sqrt(2 * np.pi))) * torch.exp(-0.5 * dist / sigma**2) #dirac delta approximation with gaussian with mean 0 and small std sigma

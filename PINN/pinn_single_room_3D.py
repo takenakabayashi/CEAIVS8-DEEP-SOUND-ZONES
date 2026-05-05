@@ -18,7 +18,7 @@ from config import ISOBEL_FS, ISOBEL_ROOMS
 
 TARGET_FREQ = 41 #Hz
 ROOM = ISOBEL_ROOMS["VR"] #VR Lab
-SOURCE = 1
+SOURCE = 1 #1 or 2 for ISOBEL (two sources)
 
 n_mic = 15 #number of points used for training
 val_fraction = 0.5
@@ -72,7 +72,7 @@ def pde(x, y):
     y1_yy = dde.grad.hessian(y, x, component=1, i=1, j=1)
     y1_zz = dde.grad.hessian(y, x, component=1, i=2, j=2)
 
-    xs, ys, zs = ROOM["sources_positions"][SOURCE] #source position
+    xs, ys, zs = ROOM["sources_positions"][SOURCE - 1] #source position
     sigma = 0.1
     dist = (x[:, 0:1] - xs)**2 + (x[:, 1:2] - ys)**2 + (x[:, 2:3] - zs)**2
     f = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) * torch.exp(-0.5 * dist / sigma**2) 
