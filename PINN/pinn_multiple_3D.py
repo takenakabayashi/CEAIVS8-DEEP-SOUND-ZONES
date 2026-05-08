@@ -7,28 +7,25 @@ TODO: add room absorption parameter, add Robin boundary conditions, look into ac
 import os
 from matplotlib import pyplot as plt
 import torch
-
-from config import SIMULATED_DATA_FILE
-from data_split import get_train_val_test_data
-
 os.environ["DDE_BACKEND"] = "pytorch"
 import deepxde as dde
 import numpy as np
 
-from data_extraction import extract_data_ISOBEL, extract_data_simulated, get_max_min_room_dims
-from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
+from config import SIMULATED_DATA_FILE
+from data_split import get_train_val_test_data
+from data_extraction import extract_data_simulated, get_max_min_room_dims_sim
+from utils import nmse_db, stack_complex_targets, validation_nmse_metric
 
 TARGET_FREQ = 41 #Hz
-
-val_fraction = 0.5
 
 c = 343.0 #m/s
 omega = 2 * np.pi * TARGET_FREQ
 k = omega / c
 
-L_min, L_max = get_max_min_room_dims(file_path=SIMULATED_DATA_FILE)
-L_min = torch.tensor(L_min)
-L_max = torch.tensor(L_max)
+room_dim_min, room_dim_max = get_max_min_room_dims_sim(file_path=SIMULATED_DATA_FILE)
+
+L_min = torch.tensor(room_dim_min, dtype=torch.float32)
+L_max = torch.tensor(room_dim_max, dtype=torch.float32)
 
 #dde.data.PDE wrapper
 #The only thing this does is change the printing statements during training to print validation loss and test metric
@@ -104,10 +101,29 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
 
 train_df, val_df, test_df = get_train_val_test_data(file_path=SIMULATED_DATA_FILE)
 
-# Extract data per split
-X_train, y_train = extract_data_simulated(df=train_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
-X_val, y_val = extract_data_simulated(df=val_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
-X_test, y_test = extract_data_simulated(df=test_df, target_freq=TARGET_FREQ, file_path=SIMULATED_DATA_FILE, max_points_per_room=1000)
+X_train, y_train = extract_data_simulated(
+    df=train_df,
+    target_freq=TARGET_FREQ,
+    file_path=SIMULATED_DATA_FILE,
+    max_points_per_room=1000,
+    room_dim_bounds=(room_dim_min, room_dim_max),
+)
+
+X_val, y_val = extract_data_simulated(
+    df=val_df,
+    target_freq=TARGET_FREQ,
+    file_path=SIMULATED_DATA_FILE,
+    max_points_per_room=1000,
+    room_dim_bounds=(room_dim_min, room_dim_max),
+)
+
+X_test, y_test = extract_data_simulated(
+    df=test_df,
+    target_freq=TARGET_FREQ,
+    file_path=SIMULATED_DATA_FILE,
+    max_points_per_room=1000,
+    room_dim_bounds=(room_dim_min, room_dim_max),
+)
 
 y_train_real = np.real(y_train).astype(np.float32)
 y_train_imag = np.imag(y_train).astype(np.float32)
@@ -122,7 +138,7 @@ bc_data_imag = dde.icbc.PointSetBC(X_train, y_train_imag, component=1)
 #https://github.com/lululxvi/deepxde/issues/1762#issuecomment-2158327633
 geom = dde.geometry.geometry_nd.Hypercube(xmin=[0] * 9, xmax=[1] * 9)
 
-y_val_targets = stack_complex_targets(y_val)
+y_test_targets = stack_complex_targets(y_test)
 
 data = ValidationPDE(
     geom,
@@ -131,8 +147,8 @@ data = ValidationPDE(
     num_domain=1000,
     num_boundary=0,
     anchors=X_train,
-    validation_x=X_val,
-    validation_y=y_val_targets,
+    validation_x=X_test,
+    validation_y=y_test_targets,
 )
 
 net = dde.nn.FNN([9] + [50] * 3 + [2], "tanh", "Glorot uniform")

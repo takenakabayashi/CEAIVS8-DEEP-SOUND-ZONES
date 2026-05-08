@@ -1,9 +1,37 @@
-import os
 import h5py
 import numpy as np
 
 from utils import create_FFT_grid
 from config import ISOBEL_FS, ISOBEL_ROOMS, SIMULATED_DATA_FILE
+
+def normalize_with_bounds(values, min_values, max_values):
+    values = np.asarray(values, dtype=np.float32)
+    min_values = np.asarray(min_values, dtype=np.float32)
+    max_values = np.asarray(max_values, dtype=np.float32)
+
+    normalized = np.zeros_like(values, dtype=np.float32)
+    denom = max_values - min_values
+
+    np.divide(values - min_values, denom, out=normalized, where=denom != 0)
+
+    return normalized
+
+def get_max_min_room_dims_ISOBEL(rooms):
+    dims = np.asarray([room["room_dimensions"] for room in rooms], dtype=np.float32)
+    return dims.min(axis=0), dims.max(axis=0)
+
+def get_max_min_room_dims_sim(file_path=SIMULATED_DATA_FILE):
+    Lx_min, Ly_min, Lz_min = float('inf'), float('inf'), float('inf')
+    Lx_max, Ly_max, Lz_max = float('-inf'), float('-inf'), float('-inf')
+
+    with h5py.File(file_path, "r") as f:
+        for room in f.keys():
+            Lx, Ly, Lz = f[room]["room_dim"][0]
+
+            Lx_min, Ly_min, Lz_min = min(Lx_min, Lx), min(Ly_min, Ly), min(Lz_min, Lz)
+            Lx_max, Ly_max, Lz_max = max(Lx_max, Lx), max(Ly_max, Ly), max(Lz_max, Lz)
+
+    return [Lx_min, Ly_min, Lz_min], [Lx_max, Ly_max, Lz_max]
 
 def extract_grid(room, source, fs, target_freq):
     grid, _ = create_FFT_grid(room, source, fs, target_freq)
@@ -24,82 +52,68 @@ def extract_grid(room, source, fs, target_freq):
 
     return X, y
 
-#X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
+#X is an array [x,y,z,lx,ly,lz,sx,sy,sz] (point coordinates, room dimensions, source coordinates)
 #x,y,z coordinates are normalized between 0 and 1
-def extract_data_ISOBEL(target_freq, fs=ISOBEL_FS, rooms = list(ISOBEL_ROOMS.values())):
+def extract_data_ISOBEL(room_dim_bounds, target_freq, fs=ISOBEL_FS, rooms=list(ISOBEL_ROOMS.values())):
     X_tot = []
     y_tot = []
 
+    min_room_dims = np.asarray(room_dim_bounds[0], dtype=np.float32)
+    max_room_dims = np.asarray(room_dim_bounds[1], dtype=np.float32)
+
     for room in rooms:
-        dir = room["directory"]
-        heights = room["heights"]
-
-        if not os.path.isdir(dir):
-            raise ValueError(f"Directory {dir} does not exist")
-        
         for source_idx, source_pos in enumerate(room["sources_positions"]):
-            source_path = os.path.join(dir, f"source_{source_idx+1}")
-            if not os.path.isdir(source_path):
-                raise ValueError(f"Directory {source_path} does not exist")
-        
-            l_x, l_y, l_z = room["room_dimensions"] #in meters
 
-            x_vals = np.linspace(0, 1, 32)
-            y_vals = np.linspace(0, 1, 32)
-            z_vals = np.array(heights) / (100.0 * l_z)
+            grid, _ = create_FFT_grid(room, source_idx + 1, fs, target_freq)
+
+            l_x, l_y, l_z = room["room_dimensions"] #in meters
+            grid_size = room["grid_size"]
+
+            #normalized point coordinates
+            x_vals = np.linspace(0, 1.0, grid_size[0])
+            y_vals = np.linspace(0, 1.0, grid_size[1])
+            z_vals = (np.array(room["heights"]) / 100.0) / l_z
 
             X, Y, Z = np.meshgrid(x_vals, y_vals, z_vals, indexing='ij')
             X_flat = X.flatten()
             Y_flat = Y.flatten()
             Z_flat = Z.flatten()
 
+            #normalize and repeat room dimensions and source position for each point in the grid
             n_points = len(X_flat)
+            room_norm = normalize_with_bounds([l_x, l_y, l_z], min_room_dims, max_room_dims)
 
-            x_dim = np.full(n_points, l_x)
-            y_dim = np.full(n_points, l_y)
-            z_dim = np.full(n_points, l_z)
+            x_dim = np.full(n_points, room_norm[0], dtype=np.float32)
+            y_dim = np.full(n_points, room_norm[1], dtype=np.float32)
+            z_dim = np.full(n_points, room_norm[2], dtype=np.float32)
 
-            sx = np.full(n_points, source_pos[0])
-            sy = np.full(n_points, source_pos[1])
-            sz = np.full(n_points, source_pos[2])
+            sx = np.full(n_points, source_pos[0]) / l_x
+            sy = np.full(n_points, source_pos[1]) / l_y
+            sz = np.full(n_points, source_pos[2]) / l_z
 
-            X_coords = np.vstack((X_flat, Y_flat, Z_flat, x_dim, y_dim, z_dim, sx, sy, sz)).T.astype(np.float32)
-            
-            grid, approximated_freq = create_FFT_grid(source_path, fs, target_freq, heights)
+            X = np.vstack((X_flat, Y_flat, Z_flat, x_dim, y_dim, z_dim, sx, sy, sz)).T.astype(np.float32)
 
-            y_target = grid.flatten().reshape(-1, 1).astype(np.complex64)
+            y = grid.flatten().reshape(-1, 1).astype(np.complex64)
 
-            X_tot.append(X_coords)
-            y_tot.append(y_target)
+            X_tot.append(X)
+            y_tot.append(y)
         
     X_tot = np.concatenate(X_tot, axis=0)
     y_tot = np.concatenate(y_tot, axis=0)
     
     return X_tot, y_tot
 
-def get_max_min_room_dims(file_path=SIMULATED_DATA_FILE):
-    Lx_min, Ly_min, Lz_min = float('inf'), float('inf'), float('inf')
-    Lx_max, Ly_max, Lz_max = float('-inf'), float('-inf'), float('-inf')
-
-    with h5py.File(file_path, "r") as f:
-        for room in f.keys():
-            Lx, Ly, Lz = f[room]["room_dim"][0]
-
-            Lx_min, Ly_min, Lz_min = min(Lx_min, Lx), min(Ly_min, Ly), min(Lz_min, Lz)
-            Lx_max, Ly_max, Lz_max = max(Lx_max, Lx), max(Ly_max, Ly), max(Lz_max, Lz)
-
-    return [Lx_min, Ly_min, Lz_min], [Lx_max, Ly_max, Lz_max]
-
 #Same as extract_data_ISOBEL but for the simulated data (stored in a h5 file)
-#X is an array [x,y,z,sx,sy,sz,lx,ly,lz] (point coordinates, source coordinates, room dimensions)
+#X is an array [x,y,z,lx,ly,lz,sx,sy,sz] (point coordinates, room dimensions, source coordinates)
 #x,y,z coordinates are normalized between 0 and 1
-def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, max_points_per_room=None): #add absorption coeff as input?
+def extract_data_simulated(df, target_freq, room_dim_bounds, file_path=SIMULATED_DATA_FILE, max_points_per_room=None):
     X_list = []
     y_list = []
 
-    min_room_dims, max_room_dims = get_max_min_room_dims(file_path)
-    min_room_dims = np.array(min_room_dims)
-    max_room_dims = np.array(max_room_dims)
+    min_room_dims, max_room_dims = room_dim_bounds
+
+    min_room_dims = np.asarray(min_room_dims, dtype=np.float32)
+    max_room_dims = np.asarray(max_room_dims, dtype=np.float32)
 
     with h5py.File(file_path, "r") as f:
         for _, row in df.iterrows():
@@ -134,7 +148,7 @@ def extract_data_simulated(df, target_freq, file_path=SIMULATED_DATA_FILE, max_p
                     # Normalize spatial coords
                     xyz_norm = rec / room_dim 
                     src_norm = src / room_dim
-                    room_norm = (room_dim - min_room_dims) / (max_room_dims - min_room_dims)
+                    room_norm = normalize_with_bounds(room_dim, min_room_dims, max_room_dims)
 
                     X_list.append([
                         xyz_norm[0], xyz_norm[1], xyz_norm[2],
