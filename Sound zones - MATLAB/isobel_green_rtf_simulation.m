@@ -1,0 +1,140 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Script to generate RTFs for the ISOBEL rooms using the Green's function.
+% This is the main script to generate the dataset of RTFs for the ISOBEL rooms.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+clear; clc;
+
+load("absorption_coefficients.mat")
+
+room_name = "ProductRoom";
+room_dim = [9.13, 12.03, 2.6];
+T60 = 0.6;  % constant T60 of 0.6s (from ISOBEL)
+c = 343; % speed of sound
+
+% frequency parameters
+Fs = 1000; % sampling freq
+duration = 1.0; % IR duration
+f_highpass = 30; % woofer high pass corner (lower limit)
+f_lowpass = 400; % woofer low pass corner (higher limit)
+df = 1 / duration;
+freqs = 0 : df : Fs/2 - df;
+K = numel(freqs);
+
+% response from woofer
+[Bhp, Ahp] = butter(2,2*f_highpass/Fs,'high'); % high pass butterworth filter
+[Blp, Alp] = butter(2,2*f_lowpass/Fs); % lowpass butterworth filter
+Imp = [1, zeros(1,K-1)]; 
+Imp = filter(Bhp,Ahp,Imp);
+Imp = filter(Blp,Alp,Imp);
+FreqWin = fft(Imp,2*K);
+FreqWin = FreqWin(1:K);
+FreqWin = FreqWin(:);
+
+f_cutoff = 1.5 * f_lowpass;
+
+height = 1.9;
+
+sources = [
+    0.32, 0.22, 0.15; 
+    4.48, 4.81, 0.15; 
+];
+
+% receiver grid — same layout as in paper
+[idxX, idxY] = meshgrid(2:31, 2:31);
+rx_x = (idxX - 1) * (room_dim(1) / 31);
+rx_y = (idxY - 1) * (room_dim(2) / 31);
+rx_z = height * ones(size(rx_x));
+rx = [rx_x(:), rx_y(:), rx_z(:)];
+
+n_sources = size(sources, 1);
+N_rcv = size(rx, 1);
+
+fprintf('Room: [%.2f x %.2f x %.2f]m  T60=%.3fs\n', ...
+    room_dim(1), room_dim(2), room_dim(3), T60);
+fprintf('Sources: %d  |  Receivers: %d  |  Frequencies: %d\n\n', ...
+    n_sources, N_rcv, K);
+
+% generate impulse responses using green's function
+% G_all: [K x n_sources x N_rcv] complex
+G_all = zeros(K, n_sources, N_rcv, 'like', single(1+1j));
+
+for src = 1:n_sources
+    fprintf('Simulating source %d/%d ... ', src, n_sources);
+    t = tic;
+    G_all(:, src, :) = greens_function(room_dim, sources(src,:), rx, freqs, T60, c, f_cutoff);
+    fprintf('done in %.2fs\n', toc(t));
+end
+
+% zero out DC bin
+G_all(1, :, :) = 0;
+
+% apply woofer
+G_all = G_all .* FreqWin;
+
+fprintf('\nSimulation complete.\n');
+
+%% --- Save results ---
+
+% save each individual mat file
+for src = 1:n_sources
+    output_dir = sprintf('ISOBEL_RTFs/' + room_name + '_RTFs/source_%d/h_%d', src, height * 100);
+    mkdir(output_dir);
+    fprintf('Saving source %d RTFs...\n', src);
+
+    for i = 1:N_rcv
+        % reconstruct complex transfer function for this receiver
+        RTF = squeeze(G_all(:, src, i));  % [K x 1] complex
+
+        rx_pos = rx(i, :);
+        idxY = mod(i-1, 30) + 2;
+        idxX = floor((i-1) / 30) + 2;
+
+        filename = fullfile(output_dir, sprintf('idxX_%d_idxY_%d.mat', idxX, idxY));
+        save(filename, 'RTF', 'freqs', 'rx_pos');
+    end
+
+    fprintf('Saved source %d RTFs to "%s"\n', src, output_dir);
+end
+
+%% =========================================================
+function G = greens_function(room_dim, src, rcv_all, freqs, T60, c, f_cutoff)
+lx = room_dim(1); ly = room_dim(2); lz = room_dim(3);
+V  = lx * ly * lz;
+
+omega = 2*pi*freqs(:);   % [K x 1]
+
+nx_max = ceil(2 * f_cutoff * lx / c) + 1;
+ny_max = ceil(2 * f_cutoff * ly / c) + 1;
+nz_max = ceil(2 * f_cutoff * lz / c) + 1;
+
+% all mode combinations at once
+[NX, NY, NZ] = ndgrid(0:nx_max, 0:ny_max, 0:nz_max);
+NX = NX(:)'; NY = NY(:)'; NZ = NZ(:)';  % [1 x N_modes]
+
+% filter to modes below f_cutoff
+omega_N = c * pi * sqrt((NX/lx).^2 + (NY/ly).^2 + (NZ/lz).^2);
+valid = omega_N <= (2*pi*f_cutoff);
+NX = NX(valid); NY = NY(valid); NZ = NZ(valid); omega_N = omega_N(valid);  % [1 x M]
+
+% normalisation [1 x M]
+Lambda2 = (1 + (NX > 0)) .* (1 + (NY > 0)) .* (1 + (NZ > 0));
+
+% source shape [1 x M]
+psi_src = cos(NX*pi*src(1)/lx) .* cos(NY*pi*src(2)/ly) .* cos(NZ*pi*src(3)/lz);
+
+% receiver shape [N_rcv x M]
+psi_rcv = cos(NX .* (pi*rcv_all(:,1)/lx)) .* ...
+          cos(NY .* (pi*rcv_all(:,2)/ly)) .* ...
+          cos(NZ .* (pi*rcv_all(:,3)/lz));
+
+% numerator [N_rcv x M]
+numer = (Lambda2 .* psi_src) .* psi_rcv;
+
+% denominator [K x M]
+delta = 3 * log(10) / T60;
+denom = omega_N.^2 - omega.^2 - 2j*delta.*omega;  % [K x 1] broadcast with [1 x M]
+
+% sum over modes → [K x N_rcv]
+G = single((c^2 / V) * ((1./denom) * numer.'));
+end
