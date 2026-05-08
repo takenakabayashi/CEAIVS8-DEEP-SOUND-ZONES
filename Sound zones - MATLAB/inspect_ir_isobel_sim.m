@@ -1,10 +1,15 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Script to inspect the impulse response generated from the ISOBEL RTFs for one of the rooms.
+% This is to verify the sanity of the generated IRs before using them for training.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 clear; clc;
 
 room_name = "ListeningRoom";
 src_idx = 1;
 height = 1.0;
-idxX_pick = 16;
-idxY_pick = 16;
+idxX_pick = 3;
+idxY_pick = 3;
 
 filename = sprintf('ISOBEL_RTFs/%s_RTFs/source_%d/h_%d/idxX_%d_idxY_%d.mat', ...
     room_name, src_idx, height * 100, idxX_pick, idxY_pick);
@@ -24,8 +29,8 @@ N = 2 * K;
 df = Fs / N;
 
 % 3. Build Hermitian spectrum (your construction is correct)
-RTF(1) = real(RTF(1)); % enforcing real DC
-H_full = [RTF; 0; conj(flipud(RTF(2:end)))];
+RTF(1) = real(0); % enforcing real DC
+H_full = [RTF; RTF(2:end) / 2; conj(flipud(RTF(2:end))) / 2];
 h = ifft(H_full, 'symmetric');
 
 fprintf('Receiver pos: [%.2f, %.2f, %.2f]\n', rx_pos);
@@ -39,7 +44,7 @@ fprintf('Any NaN/Inf: %d\n', any(~isfinite(h)));
 fprintf('Peak at: sample %d (%.1f ms)\n', kpk, (kpk - 1) / Fs * 1000);
 
 % plots
-t = (0:N-1).' / Fs;
+t = (0:length(h) - 1).' / Fs;
 
 figure('Position', [100 100 1000 700]);
 

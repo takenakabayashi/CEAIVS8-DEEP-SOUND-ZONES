@@ -1,3 +1,8 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Script to generate RTFs for the ISOBEL rooms using the Green's function.
+% This is the main script to generate the dataset of RTFs for the ISOBEL rooms.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 clear; clc;
 
 load("absorption_coefficients.mat")
@@ -6,18 +11,6 @@ room_name = "ProductRoom";
 room_dim = [9.13, 12.03, 2.6];
 T60 = 0.6;  % constant T60 of 0.6s (from ISOBEL)
 c = 343; % speed of sound
-
-% previous log spaced freq bins
-%{
-
-f_cutoff = 400; % include modes up to 400 Hz (use just lower freqs)
-
-% frequency axis — 1/12 octave in [30, 300] Hz, 40 points (matches paper)
-f_min = 30;
-K = 40;
-freqs = f_min * (2^(1/12)).^(0:K-1);
-
-%}
 
 % frequency parameters
 Fs = 1000; % sampling freq
@@ -43,8 +36,8 @@ f_cutoff = 1.5 * f_lowpass;
 height = 1.9;
 
 sources = [
-    6.65, 7.93, 0.15; 
-    5.23, 3.49, 0.15; 
+    0.32, 0.22, 0.15; 
+    4.48, 4.81, 0.15; 
 ];
 
 % receiver grid — same layout as in paper

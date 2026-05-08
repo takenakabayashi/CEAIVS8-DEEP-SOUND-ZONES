@@ -1,3 +1,8 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Script to generate a dataset of simulated RTFs for random shoebox rooms using Green's function modal expansion.
+% The scripts generate a dataset of RTFs for random shoebox rooms.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 clear; clc;
 
 save_path = 'room_dataset.h5';
@@ -6,6 +11,7 @@ mkdir('simulated_RTFs');
 
 %% parameters
 N_rooms = 10;
+room_offset = 0;
 c = 343;
 
 % frequency parameters
@@ -25,10 +31,13 @@ Imp = filter(Bhp,Ahp,Imp);
 Imp = filter(Blp,Alp,Imp);
 FreqWin = fft(Imp,2*K);
 FreqWin = FreqWin(1:K);
+FreqWin = FreqWin(:);
+
+f_cutoff = 1.5 * f_lowpass;
 
 x_min = 3.5;  x_max = 10.0;
 z_min = 1.5;  z_max = 3.5;
-V_min = 50;   V_max = 300;
+V_min = 50;   V_max = 200;
 max_aspect = 3.0;
 
 alpha_set = [0.3, 0.6, 0.9];
@@ -49,7 +58,7 @@ for i = 1:N_rooms
         Lz = z_min + (z_max - z_min) * rand();
         V  = V_min + (V_max - V_min) * rand();
         Ly = V / (Lx * Lz);
-        if Ly >= 2.0 && Ly <= 20.0 && max(Lx,Ly)/min(Lx,Ly) <= max_aspect
+        if Ly >= 2.0 && Ly <= 10.0 && max(Lx,Ly)/min(Lx,Ly) <= max_aspect
             break;
         end
     end
@@ -59,19 +68,19 @@ for i = 1:N_rooms
     S_total = 2 * (Lx*Ly + Lx*Lz + Ly*Lz);
     T60 = 0.161 * V / (alpha * S_total);
 
-    room_params{i}.room_dim = [round(Lx,2), round(Ly,2), round(Lz,2)];
-    room_params{i}.alpha = alpha;
-    room_params{i}.T60 = round(T60, 4);
+    room_params{i + room_offset}.room_dim = [round(Lx,2), round(Ly,2), round(Lz,2)];
+    room_params{i + room_offset}.alpha = alpha;
+    room_params{i + room_offset}.T60 = round(T60, 4);
 end
 
 %% --- parallel compute + save to tmp files ---
 t_total = tic;
 
 parfor i = 1:N_rooms
-    tmp_file = sprintf('simulated_RTFs/room_%05d.mat', i);
+    tmp_file = sprintf('simulated_RTFs/room_%05d.mat', i + room_offset);
     if exist(tmp_file, 'file'), continue; end  % resume if interrupted
 
-    p = room_params{i};
+    p = room_params{i + room_offset};
     Lx = p.room_dim(1);
     Ly = p.room_dim(2);
     Lz = p.room_dim(3);
@@ -109,6 +118,9 @@ parfor i = 1:N_rooms
         RTF_all(:, s, :) = greens_function(room_dim, source_pos(s,:), receiver_pos, freqs, T60, c, f_cutoff);
     end
 
+    % zero the DC bin
+    RTF_all(1, :, :) = 0;
+
     RTF_all = RTF_all .* FreqWin;
 
     % save to tmp
@@ -117,51 +129,51 @@ parfor i = 1:N_rooms
     parsave(tmp_file, room_dim, T60, alpha, freqs, source_pos, receiver_pos, RTF_real, RTF_imag);
 
     fprintf('[Room %d/%d] dim=[%.2f x %.2f x %.2f]m  T60=%.2fs  rcv=%d\n', ...
-        i, N_rooms, Lx, Ly, Lz, T60, N_rcv);
+        i + room_offset, N_rooms + room_offset, Lx, Ly, Lz, T60, N_rcv);
 end
 
 fprintf('\nAll rooms computed in %s — consolidating into HDF5...\n', format_time(toc(t_total)));
 
-%% --- consolidate tmp files into HDF5 ---
-t_save = tic;
-for i = 1:N_rooms
-    tmp_file = sprintf('simulated_RTFs/room_%05d.mat', i);
-    d = load(tmp_file);
-    grp = sprintf('/room_%05d', i);
-
-    h5create(save_path, [grp '/room_dim'], [1 3]);
-    h5write( save_path, [grp '/room_dim'], d.room_dim);
-
-    h5create(save_path, [grp '/T60'], 1);
-    h5write( save_path, [grp '/T60'], d.T60);
-
-    h5create(save_path, [grp '/alpha'], 1);
-    h5write( save_path, [grp '/alpha'], d.alpha);
-
-    h5create(save_path, [grp '/freqs'], [1 K]);
-    h5write( save_path, [grp '/freqs'], d.freqs);
-
-    h5create(save_path, [grp '/source_pos'], [8 3]);
-    h5write( save_path, [grp '/source_pos'], d.source_pos);
-
-    N_rcv = size(d.receiver_pos, 1);
-    h5create(save_path, [grp '/receiver_pos'], [N_rcv 3]);
-    h5write( save_path, [grp '/receiver_pos'], d.receiver_pos);
-
-    h5create(save_path, [grp '/RTF_real'], [K 8 N_rcv], ...
-        'Datatype', 'single', 'ChunkSize', [K 1 1], 'Deflate', 4);
-    h5write( save_path, [grp '/RTF_real'], d.RTF_real);
-
-    h5create(save_path, [grp '/RTF_imag'], [K 8 N_rcv], ...
-        'Datatype', 'single', 'ChunkSize', [K 1 1], 'Deflate', 4);
-    h5write( save_path, [grp '/RTF_imag'], d.RTF_imag);
-
-    if mod(i, 500) == 0
-        fprintf('  Saved %d/%d rooms (%s elapsed)\n', i, N_rooms, format_time(toc(t_save)));
-    end
-end
-
-fprintf('HDF5 consolidation done in %s\n', format_time(toc(t_save)));
+% %% --- consolidate tmp files into HDF5 ---
+% t_save = tic;
+% for i = 1:N_rooms
+%     tmp_file = sprintf('simulated_RTFs/room_%05d.mat', i);
+%     d = load(tmp_file);
+%     grp = sprintf('/room_%05d', i);
+% 
+%     h5create(save_path, [grp '/room_dim'], [1 3]);
+%     h5write( save_path, [grp '/room_dim'], d.room_dim);
+% 
+%     h5create(save_path, [grp '/T60'], 1);
+%     h5write( save_path, [grp '/T60'], d.T60);
+% 
+%     h5create(save_path, [grp '/alpha'], 1);
+%     h5write( save_path, [grp '/alpha'], d.alpha);
+% 
+%     h5create(save_path, [grp '/freqs'], [1 K]);
+%     h5write( save_path, [grp '/freqs'], d.freqs);
+% 
+%     h5create(save_path, [grp '/source_pos'], [8 3]);
+%     h5write( save_path, [grp '/source_pos'], d.source_pos);
+% 
+%     N_rcv = size(d.receiver_pos, 1);
+%     h5create(save_path, [grp '/receiver_pos'], [N_rcv 3]);
+%     h5write( save_path, [grp '/receiver_pos'], d.receiver_pos);
+% 
+%     h5create(save_path, [grp '/RTF_real'], [K 8 N_rcv], ...
+%         'Datatype', 'single', 'ChunkSize', [K 1 1], 'Deflate', 4);
+%     h5write( save_path, [grp '/RTF_real'], d.RTF_real);
+% 
+%     h5create(save_path, [grp '/RTF_imag'], [K 8 N_rcv], ...
+%         'Datatype', 'single', 'ChunkSize', [K 1 1], 'Deflate', 4);
+%     h5write( save_path, [grp '/RTF_imag'], d.RTF_imag);
+% 
+%     if mod(i, 500) == 0
+%         fprintf('  Saved %d/%d rooms (%s elapsed)\n', i, N_rooms, format_time(toc(t_save)));
+%     end
+% end
+% 
+% fprintf('HDF5 consolidation done in %s\n', format_time(toc(t_save)));
 fprintf('Total time: %s\n', format_time(toc(t_total)));
 
 % optional: clean up tmp files
