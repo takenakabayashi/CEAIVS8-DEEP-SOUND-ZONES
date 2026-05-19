@@ -13,14 +13,14 @@ import deepxde as dde
 import numpy as np
 
 from data_extraction import extract_grid
-from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
+from utils import filter_zero_targets, nmse_db, rmse_db, stack_complex_targets, validation_nmse_metric
 from config import ISOBEL_FS, ISOBEL_ROOMS
 
-TARGET_FREQ = 41 #Hz
+TARGET_FREQ = 31.5 #Hz
 ROOM = ISOBEL_ROOMS["VR"] #VR Lab
 SOURCE = 1 #1 or 2 for ISOBEL (two sources)
 
-n_mic = 15 #number of points used for training
+n_mic = 144 #number of points used for training
 val_fraction = 0.5
 
 c = 343.0 #m/s
@@ -123,7 +123,7 @@ data = ValidationPDE(
     validation_y=y_val_targets,
 )
 
-net = dde.nn.FNN([3] + [50] * 3 + [2], "tanh", "Glorot uniform")
+net = dde.nn.FNN([3] + [32] * 3 + [2], "tanh", "Glorot uniform")
 model = dde.Model(data, net)
 
 model.compile(
@@ -156,6 +156,9 @@ y_test = y_test_real + 1j * y_test_imag
 
 nmse_db_val = nmse_db(y_test, y_pred)
 print(f"Test NMSE: {nmse_db_val:.2f} dB")
+
+rmse_val = rmse_db(y_test, y_pred)
+print(f"Test RMSE: {rmse_val:.2f} dB")
 
 dde.utils.external.save_loss_history(losshistory, "loss.dat")
 dde.utils.plot_loss_history(losshistory)
