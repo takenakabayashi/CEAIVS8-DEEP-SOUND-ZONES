@@ -53,16 +53,19 @@ def create_pd(file_path):
     return df
 
 
-def get_train_val_test_data(file_path):
+def get_train_val_test_data(file_path, subset_size=None):
     
     # Call function that returns a panda dataframe of the data
     df = create_pd(file_path)
+
+    if subset_size is not None:
+        df = df.sample(n=subset_size, random_state=42).reset_index(drop=True)
 
     # Train split: 70%, val/test: 30%
     train_df, temp_df = train_test_split(
         df,
         test_size=0.30,
-        stratify=df["stratify_key"],
+        stratify=df["stratify_key"] if subset_size is None else None,
         random_state=42
     )
 
@@ -70,7 +73,7 @@ def get_train_val_test_data(file_path):
     val_df, test_df = train_test_split(
         temp_df,
         test_size=0.50,
-        stratify=temp_df["stratify_key"],
+        stratify=temp_df["stratify_key"] if subset_size is None else None,
         random_state=42
     )
 

@@ -17,13 +17,13 @@ t_0 = time.perf_counter()
 # num_rooms = args.num_rooms
 # max_points_per_room = args.max_points_per_room
 # num_domain = args.num_domain
-num_rooms = 67
-max_points_per_room = 67
-num_domain = 100
+num_rooms = 10
+max_points_per_room = 10
+num_domain = max_points_per_room
 
 import torch
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if device != 'cuda': torch.cuda.reset_peak_memory_stats() # for finding peak memory usage later
+if device == 'cuda': torch.cuda.reset_peak_memory_stats() # for finding peak memory usage later
 
 import os
 os.environ["DDE_BACKEND"] = "pytorch"
@@ -38,7 +38,7 @@ from utils import filter_zero_targets, nmse_db, stack_complex_targets, validatio
 t_1 = time.perf_counter() - t_0
 print(f'Imported libraries! ({t_1:.5f} seconds)\n')
 
-TARGET_FREQ = 41 #Hz
+TARGET_FREQ = 31.5 #Hz
 
 val_fraction = 0.5
 
@@ -90,7 +90,8 @@ L_range = L_max - L_min
 k_sq = k*k
 sigma = 0.1 # moved outside since the equation gives the same result every time
 coeff = (1 / ((sigma * np.sqrt(2 * np.pi)) ** 3)) # -||-
-def pde(x, y):  #here x is the input (x and y coordinates) of the model and y the output (pressure)
+def pde(x, y):  #here x is the input (x,y,z coordinates) of the model and y the output (pressure)
+    if device == 'cuda': print('\nNew pde function call:')
     y0, y1 = y[:, 0:1], y[:, 1:2] #y0 is the real part of the pressure, y1 the imaginary part
     
     Lx = x[:, 3:4] * L_range[0] + L_min[0]
@@ -102,6 +103,7 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y_dim_sq = Ly*Ly
     z_dim_sq = Lz*Lz
     
+    if device == 'cuda': print(f"GPU memory before derivatives: {torch.cuda.memory_allocated()/1e9:.2f} GB")
     # start by computing the first-order derivatives, only first 3 dims
     y0_x = dde.grad.jacobian(y, x, i=0, j=0)
     y0_y = dde.grad.jacobian(y, x, i=0, j=1)
@@ -110,6 +112,7 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_x = dde.grad.jacobian(y, x, i=1, j=0)
     y1_y = dde.grad.jacobian(y, x, i=1, j=1)
     y1_z = dde.grad.jacobian(y, x, i=1, j=2)
+    if device == 'cuda': print(f"GPU memory after 1st-order derivative: {torch.cuda.memory_allocated()/1e9:.2f} GB")
 
     # then second-order
     y0_xx = dde.grad.jacobian(y0_x, x, j=0) / x_dim_sq
@@ -119,6 +122,7 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     y1_xx = dde.grad.jacobian(y1_x, x, j=0) / x_dim_sq
     y1_yy = dde.grad.jacobian(y1_y, x, j=1) / y_dim_sq
     y1_zz = dde.grad.jacobian(y1_z, x, j=2) / z_dim_sq
+    if device == 'cuda': print(f"GPU memory after 2nd-order derivative: {torch.cuda.memory_allocated()/1e9:.2f} GB")
 
     # Point coordinates in meters
     pos_x = x[:, 0:1] * Lx
@@ -136,11 +140,13 @@ def pde(x, y):  #here x is the input (x and y coordinates) of the model and y th
     z_dist = pos_z - pos_zs
     dist = x_dist*x_dist + y_dist*y_dist + z_dist*z_dist
     f = coeff * torch.exp(-0.5 * dist / (sigma*sigma))
+    if device == 'cuda': print(f"GPU memory before return: {torch.cuda.memory_allocated()/1e9:.2f} GB")
 
     return [-y0_xx - y0_yy - y0_zz - k_sq * y0 - f,
             -y1_xx - y1_yy - y1_zz - k_sq * y1]
 
 print('Loading simulated data...')
+dde.config.set_random_seed(1234)
 t_0 = time.perf_counter()
 
 train_df, val_df, test_df = get_train_val_test_data(file_path=SIMULATED_DATA_FILE, subset_size=num_rooms)
@@ -185,7 +191,7 @@ data = ValidationPDE(
     validation_y=y_val_targets,
 )
 
-net = dde.nn.FNN([9] + [50] * 3 + [2], "tanh", "Glorot uniform")
+net = dde.nn.FNN([9] + [32] * 3 + [2], "tanh", "Glorot uniform")
 model = dde.Model(data, net)
 
 loss_weights = [1, 1, 100, 100] # pde real, pde imag, data real, data imag
@@ -197,10 +203,17 @@ model.compile(
     metrics=[validation_nmse_metric],
 )
 
+resampler = dde.callbacks.PDEPointResampler(
+    period=25,
+    pde_points=True,
+    bc_points=False  # keeps PointSetBC stable (anchor points)
+)
+
 losshistory, train_state = model.train(
-    iterations=1000,
-    display_every=500,
+    iterations=500,
+    display_every=10,
     batch_size=64,
+    callbacks=[resampler],
 )
 
 #Model evaluation
