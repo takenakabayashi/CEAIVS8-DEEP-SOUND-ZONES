@@ -205,9 +205,9 @@ geom = dde.geometry.geometry_nd.Hypercube(xmin=[0] * 10, xmax=[1] * 10) # 10 dim
 def boundary_fn(x, on_boundary): # this assumes that all floors, wall, and ceiling has the same absorption properties
     eps = 1e-6
     return on_boundary and (
-        abs(x[0]) < eps or abs(x[0] - 1) < eps or
-        abs(x[1]) < eps or abs(x[1] - 1) < eps or
-        abs(x[2]) < eps or abs(x[2] - 1) < eps
+        abs(x[0]) < eps or abs(x[0] - 1) < eps or # on x wall
+        abs(x[1]) < eps or abs(x[1] - 1) < eps or # on y wall
+        abs(x[2]) < eps or abs(x[2] - 1) < eps    # on z wall
     )
 
 def compute_impedance_numpy(abs_coeff):
