@@ -16,7 +16,7 @@ from data_extraction import extract_grid
 from utils import filter_zero_targets, nmse_db, rmse_db, stack_complex_targets, validation_nmse_metric
 from config import ISOBEL_FS, ISOBEL_ROOMS
 
-TARGET_FREQ = 41 #Hz
+TARGET_FREQ = 31.5 #Hz
 ROOM = ISOBEL_ROOMS["VR"]
 SOURCE = 1
 
@@ -167,9 +167,9 @@ geom = dde.geometry.geometry_nd.Hypercube([0, 0, 0], [l_x, l_y, l_z])
 def boundary_fn(x, on_boundary): # this assumes that all floors, wall, and ceiling has the same absorption properties
     eps = 1e-6
     return on_boundary and (
-        abs(x[0]) < eps or abs(x[0] - 1) < eps or # on x wall
-        abs(x[1]) < eps or abs(x[1] - 1) < eps or # on y wall
-        abs(x[2]) < eps or abs(x[2] - 1) < eps    # on z wall
+        abs(x[0]) < eps or abs(x[0] - l_x) < eps or # on x wall
+        abs(x[1]) < eps or abs(x[1] - l_y) < eps or # on y wall
+        abs(x[2]) < eps or abs(x[2] - l_z) < eps    # on z wall
     )
 
 def compute_impedance_numpy(abs_coeff):
@@ -189,13 +189,13 @@ def get_physical_normal(x): # x in normalized [0,1]
 
     # find the reflected surface(s)
     norm_x = torch.where(torch.abs(x[:, 0:1]) < eps, -1.0,
-                torch.where(torch.abs(x[:, 0:1] - 1) < eps, 1.0, 0.0))
+                torch.where(torch.abs(x[:, 0:1] - l_x) < eps, 1.0, 0.0))
 
     norm_y = torch.where(torch.abs(x[:, 1:2]) < eps, -1.0,
-                torch.where(torch.abs(x[:, 1:2] - 1) < eps, 1.0, 0.0))
+                torch.where(torch.abs(x[:, 1:2] - l_y) < eps, 1.0, 0.0))
     
     norm_z = torch.where(torch.abs(x[:, 2:3]) < eps, -1.0,
-                torch.where(torch.abs(x[:, 2:3] - 1) < eps, 1.0, 0.0))
+                torch.where(torch.abs(x[:, 2:3] - l_z) < eps, 1.0, 0.0))
 
     # the boundary point might be a corner and ruin the normal
     norm = torch.cat([norm_x, norm_y, norm_z], dim=1)
@@ -253,7 +253,7 @@ data = ValidationPDE(
     pde,
     [bc_data_real, bc_data_imag, bc_robin_real, bc_robin_imag],
     num_domain=10000,
-    num_boundary=2048,
+    num_boundary=256,
     anchors=X_train,
     validation_x=X_val,
     validation_y=y_val_targets,
@@ -271,8 +271,8 @@ model.compile(
 )
 
 losshistory, train_state = model.train(
-    iterations=10000,
-    display_every=100,
+    iterations=1000,
+    display_every=10,
 )
 
 #Model evaluation
