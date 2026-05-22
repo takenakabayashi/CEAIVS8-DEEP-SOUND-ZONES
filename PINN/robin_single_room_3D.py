@@ -5,6 +5,7 @@ It takes x,y,z coordinates as input, output is the predicted real and imaginary 
 TODO: add Robin boundary conditions, look into activation function, number of iterations and loss weights
 """
 import os
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 import torch
 os.environ["DDE_BACKEND"] = "pytorch"
@@ -12,7 +13,7 @@ import deepxde as dde
 import numpy as np
 
 from data_extraction import extract_grid
-from utils import filter_zero_targets, nmse_db, stack_complex_targets, validation_nmse_metric
+from utils import filter_zero_targets, nmse_db, rmse_db, stack_complex_targets, validation_nmse_metric
 from config import ISOBEL_FS, ISOBEL_ROOMS
 
 TARGET_FREQ = 41 #Hz
@@ -258,7 +259,7 @@ data = ValidationPDE(
     validation_y=y_val_targets,
 )
 
-net = dde.nn.FNN([3] + [50] * 3 + [2], "tanh", "Glorot uniform")
+net = dde.nn.FNN([3] + [32] * 3 + [2], "tanh", "Glorot uniform")
 model = dde.Model(data, net)
 
 model.compile(
@@ -291,3 +292,10 @@ y_test = y_test_real + 1j * y_test_imag
 
 nmse_db_val = nmse_db(y_test, y_pred)
 print(f"Test NMSE: {nmse_db_val:.2f} dB")
+
+rmse_val = rmse_db(y_test, y_pred)
+print(f"Test RMSE: {rmse_val:.2f} dB")
+
+dde.utils.external.save_loss_history(losshistory, "loss.dat")
+dde.utils.plot_loss_history(losshistory)
+plt.show()

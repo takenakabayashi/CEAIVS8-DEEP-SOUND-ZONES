@@ -15,10 +15,13 @@ def nmse_db(y_true, y_pred):
     
     eps = 1e-12 #avoids division by 0
     nmse = num / (denom + eps)
-    
-    nmse_db = 10 * np.log10(nmse + eps) #dB conversion
-    
-    return nmse_db
+
+    return 10 * np.log10(nmse + eps) 
+
+def rmse_db(y_true, y_pred):
+    rmse = np.mean(np.abs(y_true - y_pred)**2)
+    eps = 1e-12
+    return 10 * np.log10(rmse + eps)
 
 #filter out points with pressure (approximately) equal to zero
 def filter_zero_targets(X, y, magnitude_threshold=1e-8):
