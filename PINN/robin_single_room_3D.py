@@ -174,17 +174,17 @@ def boundary_fn(x, on_boundary): # this assumes that all floors, wall, and ceili
 
 def compute_impedance_numpy(abs_coeff):
     eps = 5e-3
-    abs_coeff = np.clip(abs_coeff, abs_coeff-eps, abs_coeff_vr+eps) # just to avoid weird sampling
+    abs_coeff = np.clip(abs_coeff, abs_coeff-eps, abs_coeff+eps) # just to avoid weird sampling
     impedance = (1 + np.sqrt(1 - abs_coeff)) / (1 - np.sqrt(1 - abs_coeff))
     return impedance
 
 def compute_impedance_torch(abs_coeff):
     eps = 5e-3
-    abs_coeff = np.clip(abs_coeff, abs_coeff-eps, abs_coeff_vr+eps) # just to avoid weird sampling
+    abs_coeff = torch.clamp(abs_coeff, abs_coeff-eps, abs_coeff+eps) # just to avoid weird sampling
     impedance = (1 + torch.sqrt(1 - abs_coeff)) / (1 - torch.sqrt(1 - abs_coeff))
     return impedance
 
-def get_physical_normal(x): # x in normalized [0,1]
+def get_physical_normal(x): # x in physical room coordinates
     eps = 1e-6
 
     # find the reflected surface(s)
@@ -206,9 +206,6 @@ def get_physical_normal(x): # x in normalized [0,1]
 
 def robin_real(x, y, X): # X is unused but required by the library (it is just x in a NumPy array)
     grad_u_r = dde.grad.jacobian(y, x, i=0)  # du_r
-    grad_u_r[:, 0:1]
-    grad_u_r[:, 1:2]
-    grad_u_r[:, 2:3]
 
     # find the reflected surface
     normal = get_physical_normal(x)
@@ -225,9 +222,6 @@ def robin_real(x, y, X): # X is unused but required by the library (it is just x
 
 def robin_imag(x, y, X): # X is unused but required by the library (it is just x in a NumPy array)
     grad_u_i = dde.grad.jacobian(y, x, i=1)  # du_i
-    grad_u_i[:, 0:1]
-    grad_u_i[:, 1:2]
-    grad_u_i[:, 2:3]
 
     # find the reflected surface
     normal = get_physical_normal(x)
@@ -271,7 +265,7 @@ model.compile(
 )
 
 losshistory, train_state = model.train(
-    iterations=1000,
+    iterations=10,
     display_every=10,
 )
 
